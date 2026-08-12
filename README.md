@@ -1,5 +1,7 @@
 # NWU UAPSA QR Code Attendance
 
+- *ANDROID ONLY, sorry IOS users :<
+
 A QR-code attendance scanner and roster manager that runs as a website, an installable Android app, or a desktop-friendly page for laptops — with **no backend server**. Everything is scanned, logged, and exported straight from the browser, and all data stays on the device it's used on.
 
 Built for schools/orgs that need to track attendance across multiple sections or year levels at once (e.g. `BSARCH1A`, `BSARCH1B`, `BSARCH2A`, ...), without importing everyone into one giant undifferentiated list.
