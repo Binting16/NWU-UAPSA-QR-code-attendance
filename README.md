@@ -6,7 +6,7 @@ A QR-code attendance scanner and roster manager that runs as a website, an insta
 
 Built for schools/orgs that need to track attendance across multiple sections or year levels at once (e.g. `BSARCH1A`, `BSARCH1B`, `BSARCH2A`, ...), without importing everyone into one giant undifferentiated list.
 
-⚠️ Note: HTML version is still in development for further updates. I'm an independent developer and an architecture student with a lot of architectural plates (endless tbh) so please bear with me.
+⚠️ Note: HTML version is still in development for further updates. I'm an independent developer and an architecture student with a lot of architectural plates (Ayawq mabagsak sa AD fls) so please bear with me.
 ---
 
 ## Features
