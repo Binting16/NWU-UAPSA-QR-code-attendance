@@ -1,4 +1,4 @@
-# QR Attendance
+# NWU UAPSA QR Code Attendance
 
 A QR-code attendance scanner and roster manager that runs as a website, an installable Android app, or a desktop-friendly page for laptops — with **no backend server**. Everything is scanned, logged, and exported straight from the browser, and all data stays on the device it's used on.
 
