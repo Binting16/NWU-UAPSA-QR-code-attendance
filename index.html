@@ -1,0 +1,1594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B6E4F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>QR Attendance Scanner</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --ink:#1A2332;
+  --muted:#5B6B82;
+  --bg:#EEF6F2;
+  --surface:#FFFFFF;
+  --border:#D5E5DC;
+  --primary:#0B6E4F;
+  --primary-dark:#063D2B;
+  --primary-tint:#DFF3EA;
+  --accent:#E8A33D;
+  --accent-dark:#C5841F;
+  --success:#22B573;
+  --success-bg:#E1F7EC;
+  --success-ink:#0E7A4C;
+  --warn:#B8841A;
+  --warn-bg:#FCF1DA;
+  --danger:#C5413B;
+  --danger-bg:#FBE7E5;
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'Inter',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+  --radius:16px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-body);
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:96px;
+}
+input,select,button,textarea{font-family:inherit;font-size:16px;}
+.app{max-width:720px;margin:0 auto;padding:0 14px 24px;}
+.app-body{display:contents;} /* on mobile: no-op, cards stack exactly as before */
+.col-left,.col-right{display:contents;}
+
+@media(min-width:960px){
+  .app{max-width:1180px;}
+  .app-body{
+    display:grid;
+    grid-template-columns:380px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+  .col-left{display:flex;flex-direction:column;}
+  .col-right{display:flex;flex-direction:column;}
+  .col-left .card{margin-bottom:20px;}
+  .col-right .table-wrap{max-height:calc(100vh - 260px);}
+}
+
+/* ---------- Header ---------- */
+header.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 4px 14px;
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.brand-mark{
+  width:38px;height:38px;border-radius:10px;background:var(--primary);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  box-shadow:0 2px 0 var(--primary-dark);
+}
+.brand-mark svg{width:20px;height:20px;}
+.brand h1{font-family:var(--font-display);font-size:18px;margin:0;line-height:1.1;}
+.brand p{margin:0;font-size:12px;color:var(--muted);}
+.group-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch;}
+.group-tabs.hidden{display:none;}
+.group-tab{
+  flex-shrink:0;display:flex;align-items:center;gap:7px;
+  padding:8px 10px 8px 14px;border-radius:999px;border:1.5px solid var(--border);
+  background:#FBFCFE;color:var(--muted);font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.group-tab.active{background:var(--primary);border-color:transparent;color:#fff;}
+.group-tab-x{
+  width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:14px;line-height:1;color:inherit;opacity:.65;flex-shrink:0;
+}
+.group-tab.active .group-tab-x{opacity:.85;}
+.group-tab:active{transform:scale(0.97);}
+.field select{
+  width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
+  background:#FBFCFE;color:var(--ink);font-size:14px;
+}
+.usb-scan-field input{border-style:dashed;}
+.usb-scan-field input:focus{border-style:solid;}
+.manual-entry-row{display:flex;gap:8px;}
+.manual-entry-row input{flex:1;min-width:0;}
+.manual-entry-row .btn{flex-shrink:0;padding:0 16px;}
+.group-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.group-chips.hidden{display:none;}
+.group-chip{
+  padding:5px 11px;border-radius:999px;border:1.5px solid var(--border);background:#FBFCFE;
+  color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;
+}
+.group-chip:active{transform:scale(0.96);}
+.icon-btn{
+  width:40px;height:40px;border-radius:10px;border:1px solid var(--border);
+  background:var(--surface);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--ink);
+}
+.icon-btn:active{transform:scale(0.96);}
+
+/* ---------- Cards ---------- */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:16px;
+  margin-bottom:14px;
+}
+.card-title{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--font-display);font-size:13px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--primary);
+  margin:0 0 12px;
+}
+.card-title .tick{width:6px;height:14px;background:var(--accent);border-radius:2px;display:inline-block;}
+
+.field{margin-bottom:10px;}
+.field:last-child{margin-bottom:0;}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;}
+.field input[type=text],.field input[type=date]{
+  width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
+  background:#FBFCFE;color:var(--ink);
+}
+.field input:focus,.field select:focus{outline:2px solid var(--primary);outline-offset:1px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  min-height:46px;padding:0 16px;border-radius:12px;border:1px solid transparent;
+  font-weight:600;font-size:14px;cursor:pointer;line-height:1;
+}
+.btn:active{transform:scale(0.97);}
+.btn-block{width:100%;}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 2px 0 var(--primary-dark);}
+.btn-accent{background:var(--accent);color:#3A2700;box-shadow:0 2px 0 var(--accent-dark);}
+.btn-ghost{background:var(--surface);color:var(--primary);border-color:var(--border);}
+.btn-danger{background:var(--danger-bg);color:var(--danger);border-color:#F0C5C2;}
+.btn-sm{min-height:34px;padding:0 10px;font-size:12px;border-radius:9px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ---------- Scanner ---------- */
+.viewfinder{
+  position:relative;width:100%;max-width:340px;aspect-ratio:1/1;margin:0 auto;
+  background:#0B1320;border-radius:20px;overflow:hidden;
+}
+#qr-reader{width:100%;height:100%;}
+#qr-reader video{width:100%!important;height:100%!important;object-fit:cover;}
+.vf-placeholder{
+  position:absolute;inset:0;display:flex;flex-direction:column;gap:8px;
+  align-items:center;justify-content:center;color:#A9B7CC;text-align:center;padding:20px;
+  font-size:13px;
+}
+.vf-placeholder svg{width:34px;height:34px;opacity:.7;}
+.bracket{position:absolute;width:30px;height:30px;border-color:var(--accent);pointer-events:none;z-index:2;}
+.bracket.tl{top:12px;left:12px;border-top:4px solid;border-left:4px solid;border-top-left-radius:8px;}
+.bracket.tr{top:12px;right:12px;border-top:4px solid;border-right:4px solid;border-top-right-radius:8px;}
+.bracket.bl{bottom:12px;left:12px;border-bottom:4px solid;border-left:4px solid;border-bottom-left-radius:8px;}
+.bracket.br{bottom:12px;right:12px;border-bottom:4px solid;border-right:4px solid;border-bottom-right-radius:8px;}
+.scanline{
+  position:absolute;left:10%;right:10%;height:2px;top:12px;z-index:2;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  box-shadow:0 0 10px 1px var(--accent);opacity:0;
+}
+.viewfinder.is-scanning .scanline{opacity:1;animation:sweep 2.4s ease-in-out infinite;}
+@keyframes sweep{0%{top:12px;}50%{top:calc(100% - 14px);}100%{top:12px;}}
+
+.period-toggle{display:flex;gap:8px;margin-bottom:6px;}
+.period-btn{
+  flex:1;min-height:38px;border-radius:11px;border:1.5px solid var(--border);
+  background:#FBFCFE;color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;
+}
+.period-btn.active{border-color:transparent;background:var(--primary);color:#fff;}
+.period-btn:active{transform:scale(0.97);}
+.scan-mode-toggle{display:flex;gap:8px;margin-bottom:2px;}
+.mode-btn{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  min-height:42px;border-radius:11px;border:1.5px solid var(--border);background:#FBFCFE;
+  color:var(--muted);font-weight:700;font-size:13px;cursor:pointer;
+}
+.mode-btn .dot{width:8px;height:8px;border-radius:50%;background:#C2CCDA;flex-shrink:0;}
+.mode-btn.active{border-color:transparent;}
+.mode-btn.active.mode-in{background:var(--success-bg);color:var(--success-ink);}
+.mode-btn.active.mode-in .dot{background:var(--success);}
+.mode-btn.active.mode-out{background:var(--danger-bg);color:var(--danger);}
+.mode-btn.active.mode-out .dot{background:var(--danger);}
+.mode-btn:active{transform:scale(0.97);}
+.scanner-controls{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap;}
+.camera-select{margin-top:10px;}
+.camera-select select{
+  width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#FBFCFE;
+}
+
+/* result banner */
+.result-banner{
+  margin-top:14px;border-radius:14px;padding:14px;border:1.5px dashed var(--border);
+  display:flex;align-items:center;gap:12px;background:#FBFCFE;transition:all .15s ease;
+}
+.result-banner .rb-icon{font-size:26px;line-height:1;width:34px;text-align:center;flex-shrink:0;}
+.result-banner .rb-text{min-width:0;}
+.result-banner .rb-title{font-weight:700;font-size:14px;margin:0 0 2px;}
+.result-banner .rb-sub{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin:0;word-break:break-word;}
+.result-banner.success{border-style:solid;border-color:var(--success);background:var(--success-bg);}
+.result-banner.success .rb-title{color:var(--success-ink);}
+.result-banner.duplicate{border-style:solid;border-color:var(--accent);background:var(--warn-bg);}
+.result-banner.duplicate .rb-title{color:var(--warn);}
+.result-banner.unknown{border-style:solid;border-color:var(--danger);background:var(--danger-bg);}
+.result-banner.unknown .rb-title{color:var(--danger);}
+
+/* ---------- Table ---------- */
+.summary-line{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;}
+.summary-line .count-chip{
+  background:var(--primary-tint);color:var(--primary-dark);font-weight:700;font-size:12px;
+  padding:5px 10px;border-radius:999px;white-space:nowrap;
+}
+.search-input{
+  flex:1;min-width:140px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#FBFCFE;
+}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:14px;max-height:420px;overflow-y:auto;}
+table{border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:12.5px;}
+thead th{
+  position:sticky;top:0;background:var(--primary);color:#fff;font-family:var(--font-body);
+  font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+  padding:10px 10px;white-space:nowrap;z-index:1;
+}
+th.col-name,td.col-name{position:sticky;left:0;z-index:2;background:var(--surface);min-width:160px;text-align:left;font-family:var(--font-body);font-weight:500;}
+th.col-id,td.col-id{position:sticky;left:160px;z-index:2;background:var(--surface);min-width:96px;}
+thead th.col-name,thead th.col-id{background:var(--primary);color:#fff;z-index:3;}
+td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:center;}
+tbody tr:last-child td{border-bottom:none;}
+td.present{background:var(--success-bg);color:var(--success-ink);font-weight:600;}
+td.present.out-cell{background:var(--danger-bg);color:var(--danger);}
+td.empty-cell{color:#C2CCDA;}
+td.editable-cell{cursor:pointer;}
+td.editable-cell:hover{filter:brightness(0.93);}
+td.editable-cell:active{filter:brightness(0.85);}
+.col-actions{white-space:nowrap;}
+.row-icon-btn{border:none;background:none;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;}
+.row-icon-btn:active{background:var(--bg);}
+.date-th-wrap{display:flex;align-items:center;justify-content:center;gap:5px;}
+thead tr.subhead th{
+  font-size:9.5px;background:var(--primary-dark);padding:5px 6px;
+}
+th.sub-in,th.sub-out{min-width:64px;}
+td.col-in,td.col-out{min-width:64px;}
+.date-th-x{cursor:pointer;opacity:.7;font-weight:700;}
+.empty-state{padding:26px 14px;text-align:center;color:var(--muted);font-size:13.5px;}
+
+/* ---------- Bottom action bar ---------- */
+.action-bar{
+  position:fixed;left:0;right:0;bottom:0;background:var(--surface);
+  border-top:1px solid var(--border);padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  display:flex;gap:8px;justify-content:center;flex-wrap:wrap;z-index:50;
+  box-shadow:0 -4px 14px rgba(20,30,50,.06);
+}
+.action-bar .btn{flex:1 1 auto;min-width:0;font-size:13px;padding:0 10px;}
+@media(min-width:960px){
+  .action-bar{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:1180px;}
+}
+
+/* ---------- Settings drawer ---------- */
+.drawer-backdrop{position:fixed;inset:0;background:rgba(15,20,30,.45);z-index:90;display:none;}
+.drawer-backdrop.open{display:block;}
+.drawer{
+  position:fixed;right:0;top:0;bottom:0;width:min(360px,90vw);background:var(--surface);
+  z-index:91;padding:20px;overflow-y:auto;transform:translateX(100%);transition:transform .2s ease;
+}
+.drawer.open{transform:translateX(0);}
+.drawer h2{font-family:var(--font-display);font-size:16px;margin:0 0 4px;}
+.drawer .sub{font-size:12px;color:var(--muted);margin:0 0 16px;}
+.help-text{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5;}
+.divider{height:1px;background:var(--border);margin:18px 0;}
+
+/* ---------- Modal ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,20,30,.5);z-index:99;display:none;align-items:flex-end;justify-content:center;}
+.modal-backdrop.open{display:flex;}
+.modal{background:var(--surface);width:100%;max-width:420px;border-radius:18px 18px 0 0;padding:20px;}
+@media(min-width:600px){.modal-backdrop{align-items:center;}.modal{border-radius:18px;}}
+.modal h3{font-family:var(--font-display);margin:0 0 4px;font-size:16px;}
+.modal .sub{font-size:12px;color:var(--muted);margin:0 0 14px;}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin:12px 0 16px;font-size:13px;}
+.checkbox-row input{width:18px;height:18px;}
+
+/* misc */
+.hidden{display:none!important;}
+.toast{
+  position:fixed;left:50%;bottom:100px;transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;
+  z-index:120;opacity:0;pointer-events:none;transition:opacity .2s ease;
+}
+.toast.show{opacity:1;}
+.lib-error{background:var(--danger-bg);color:var(--danger);border:1px solid #F0C5C2;border-radius:12px;padding:12px;font-size:13px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" stroke="white" stroke-width="2"/>
+          <rect x="14" y="3" width="7" height="7" rx="1.5" stroke="white" stroke-width="2"/>
+          <rect x="3" y="14" width="7" height="7" rx="1.5" stroke="white" stroke-width="2"/>
+          <path d="M14 14h3v3h-3zM18 18h3v3h-3zM14 21h3M21 14v3" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div>
+        <h1 id="appTitle">QR Attendance</h1>
+        <p>Scan &middot; Log &middot; Export</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" stroke="#1A2332" stroke-width="1.8"/><path d="M19.4 13.5a7.97 7.97 0 000-3l1.9-1.5-2-3.4-2.2.9a8 8 0 00-2.6-1.5L14 2h-4l-.5 2.4a8 8 0 00-2.6 1.5l-2.2-.9-2 3.4L4.6 10a7.97 7.97 0 000 3l-1.9 1.5 2 3.4 2.2-.9a8 8 0 002.6 1.5L10 22h4l.5-2.4a8 8 0 002.6-1.5l2.2.9 2-3.4-1.9-1.5z" stroke="#1A2332" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </button>
+  </header>
+
+  <div id="libError" class="lib-error hidden"></div>
+
+  <!-- (Group switcher now lives as tabs directly above the Attendance Log table) -->
+
+  <div class="app-body">
+    <div class="col-left">
+      <!-- Session setup -->
+      <section class="card">
+        <p class="card-title"><span class="tick"></span>Session</p>
+        <div class="field">
+          <label for="fileNameInput">Export file name (event or date)</label>
+          <input type="text" id="fileNameInput" placeholder="e.g. Freshmen Orientation 2026">
+          <p class="help-text">Every group becomes its own tab inside this one Excel file.</p>
+        </div>
+        <div class="field">
+          <label for="sessionLabelInput">Column label for today's log</label>
+          <input type="text" id="sessionLabelInput">
+        </div>
+        <div class="field">
+          <label>Session period</label>
+          <div class="period-toggle" role="group" aria-label="Session period">
+            <button type="button" class="period-btn active" id="periodAmBtn" data-period="AM">AM</button>
+            <button type="button" class="period-btn" id="periodPmBtn" data-period="PM">PM</button>
+          </div>
+          <p class="help-text">Logs a separate AM and PM column per day, each with its own Time In / Time Out.</p>
+        </div>
+      </section>
+
+      <!-- Scanner -->
+      <section class="card">
+        <p class="card-title"><span class="tick"></span>Scanner</p>
+        <div class="scan-mode-toggle" role="group" aria-label="Scan mode">
+          <button type="button" class="mode-btn mode-in active" id="modeInBtn" data-mode="in"><span class="dot"></span>Time In</button>
+          <button type="button" class="mode-btn mode-out" id="modeOutBtn" data-mode="out"><span class="dot"></span>Time Out</button>
+        </div>
+        <div class="viewfinder" id="viewfinder">
+          <div id="qr-reader"></div>
+          <div class="vf-placeholder" id="vfPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 7V5a1 1 0 011-1h2M20 7V5a1 1 0 00-1-1h-2M4 17v2a1 1 0 001 1h2M20 17v2a1 1 0 01-1 1h-2" stroke="#A9B7CC" stroke-width="1.8" stroke-linecap="round"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="#A9B7CC" stroke-width="1.8"/></svg>
+            <span>Tap "Start Scanning" and point the camera at a student's QR code</span>
+          </div>
+          <div class="bracket tl"></div><div class="bracket tr"></div>
+          <div class="bracket bl"></div><div class="bracket br"></div>
+          <div class="scanline"></div>
+        </div>
+
+        <div class="scanner-controls">
+          <button class="btn btn-primary" id="startBtn">Start Scanning</button>
+          <button class="btn btn-ghost hidden" id="stopBtn">Stop</button>
+          <button class="btn btn-ghost hidden" id="switchCamBtn">Switch Camera</button>
+        </div>
+        <div class="camera-select hidden" id="cameraSelectWrap">
+          <select id="cameraSelect"></select>
+        </div>
+
+        <div class="field usb-scan-field">
+          <label for="usbScanInput">Can't scan the QR code? Enter the Student ID manually</label>
+          <div class="manual-entry-row">
+            <input type="text" id="usbScanInput" placeholder="Type ID, or scan with a USB scanner…" autocomplete="off">
+            <button type="button" class="btn btn-primary" id="manualSubmitBtn">Submit</button>
+          </div>
+        </div>
+
+        <div class="result-banner" id="resultBanner">
+          <div class="rb-icon" id="rbIcon">📷</div>
+          <div class="rb-text">
+            <p class="rb-title" id="rbTitle">Ready to scan</p>
+            <p class="rb-sub" id="rbSub">Logged entries will appear in the table below</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="col-right">
+      <!-- Roster / Log -->
+      <section class="card">
+        <p class="card-title"><span class="tick"></span>Attendance Log</p>
+        <div class="group-tabs hidden" id="groupTabs"></div>
+        <div class="summary-line">
+          <input type="text" class="search-input" id="searchInput" placeholder="Search name or ID&hellip;">
+          <span class="count-chip" id="countChip">0 / 0 present</span>
+        </div>
+        <div class="table-wrap">
+          <table id="rosterTable">
+            <thead>
+              <tr id="tableHeadRow"></tr>
+              <tr id="tableSubHeadRow" class="subhead"></tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+</div>
+
+<!-- Bottom action bar -->
+<div class="action-bar">
+  <input type="file" id="rosterFile" accept=".xlsx,.xls,.csv" hidden>
+  <button class="btn btn-ghost" id="importBtn">⬆ Import</button>
+  <button class="btn btn-ghost" id="addStudentBtn">＋ Add</button>
+  <button class="btn btn-accent" id="exportXlsxBtn">Excel</button>
+  <button class="btn btn-primary hidden" id="shareBtn">Share</button>
+</div>
+
+<!-- Settings drawer -->
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<div class="drawer" id="drawer">
+  <h2>Settings</h2>
+  <p class="sub">App branding &amp; data controls</p>
+
+  <div class="field">
+    <label for="appNameInput">App name</label>
+    <input type="text" id="appNameInput" placeholder="QR Attendance">
+    <p class="help-text">Shown at the top of the app. To change the app's name and icon on your phone's home screen, that's a separate native-app step — see the setup guide.</p>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
+    <label>Data</label>
+    <p class="help-text">Your roster and logs are saved on this device only, in this browser. Importing a roster file merges new students in &mdash; it never erases existing logs.</p>
+  </div>
+  <button class="btn btn-danger btn-block" id="clearDataBtn">Clear all data</button>
+
+  <div class="divider"></div>
+  <p class="help-text" id="cameraHelpText">Camera access requires this page to be served over HTTPS (or opened from localhost). If the camera won't start, check that this page's address starts with https:// and that camera permission is allowed in your browser.</p>
+  <p class="help-text" id="buildTag" style="text-align:center;margin-top:14px;opacity:.6;"></p>
+</div>
+
+<!-- Add / unknown-ID modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3 id="modalTitle">Add student</h3>
+    <p class="sub" id="modalSub">Add a new entry to the roster.</p>
+    <div class="field">
+      <label for="modalIdInput">Student ID</label>
+      <input type="text" id="modalIdInput" placeholder="24-01902">
+    </div>
+    <div class="field">
+      <label for="modalNameInput">Full name</label>
+      <input type="text" id="modalNameInput" placeholder="Last name, First name M.I.">
+    </div>
+    <div class="field">
+      <label for="modalGroupInput">Group</label>
+      <input type="text" id="modalGroupInput" placeholder="e.g. BSARCH1A">
+      <div class="group-chips hidden" id="modalGroupChips"></div>
+      <p class="help-text">Type a new name to create a group on the spot, or tap an existing one above to add into it.</p>
+    </div>
+    <div class="checkbox-row">
+      <input type="checkbox" id="modalMarkPresent">
+      <label for="modalMarkPresent" id="modalMarkPresentLabel">Mark present for today's session</label>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="modalCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="modalConfirmBtn" style="flex:1">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import target modal -->
+<div class="modal-backdrop" id="importModalBackdrop">
+  <div class="modal">
+    <h3>Import roster</h3>
+    <p class="sub">Which group should these students go into?</p>
+    <div class="field">
+      <label for="importGroupInput">Group name</label>
+      <input type="text" id="importGroupInput" placeholder="e.g. BSARCH1A">
+      <div class="group-chips hidden" id="importGroupChips"></div>
+      <p class="help-text">Type a new name to create a fresh group, or tap an existing one above to add these names into it.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="importCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="importConfirmBtn" style="flex:1">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Multi-sheet import modal -->
+<div class="modal-backdrop" id="multiImportModalBackdrop">
+  <div class="modal">
+    <h3>Multiple tabs found</h3>
+    <p class="sub" id="multiImportSub">This file has several worksheet tabs — each one becomes its own group:</p>
+    <div class="group-chips" id="multiImportChips" style="margin-bottom:6px;"></div>
+    <p class="help-text">Each tab's own name is used as the group name, and any names already in a matching group get merged in rather than duplicated.</p>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="multiImportCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="multiImportConfirmBtn" style="flex:1">Import all as groups</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Libraries: try the local bundled copies first (works fully offline); if either
+     is missing or fails to load (e.g. the lib/ folder wasn't copied alongside this
+     file), automatically fall back to loading it from a CDN instead. -->
+<script>
+(function(){
+  function loadScript(src){
+    return new Promise(function(resolve, reject){
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = function(){ resolve(true); };
+      s.onerror = function(){ reject(new Error('Failed to load ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+  function ensureLib(localSrc, cdnSrc, isLoaded){
+    return loadScript(localSrc)
+      .then(function(){ return isLoaded(); })
+      .catch(function(){
+        console.warn('Local library missing/failed (' + localSrc + '), trying CDN fallback…');
+        return loadScript(cdnSrc).then(isLoaded).catch(function(){ return false; });
+      });
+  }
+  window.__libsReady = Promise.all([
+    ensureLib('lib/html5-qrcode.min.js', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js', function(){ return typeof Html5Qrcode !== 'undefined'; }),
+    ensureLib('lib/xlsx.bundle.js', 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js', function(){ return typeof XLSX !== 'undefined'; })
+  ]);
+})();
+</script>
+
+<script>
+/* =========================================================================
+   CONFIG — edit these if you want defaults baked into the file itself.
+   ========================================================================= */
+const CONFIG = {
+  DUPLICATE_SCAN_COOLDOWN_MS: 3000,
+};
+
+/* ============================== Storage ============================== */
+const STORAGE_KEY = 'qrAttendanceApp_v1';
+// Bump this string whenever this file changes — visible at the bottom of the
+// Settings drawer, so you can always confirm the latest file actually made it
+// into the build instead of guessing.
+const BUILD_TAG = 'robust-camera-error-2026-08-13';
+const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { fileName:'', groups:{}, groupOrder:[], activeGroupId:null };
+}
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+function applyAppName(){
+  const name = (settings.appName && settings.appName.trim()) || 'QR Attendance';
+  document.title = `${name} Scanner`;
+  const h1 = $('appTitle');
+  if(h1) h1.textContent = name;
+}
+
+function loadSettings(){
+  try{
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { appName:'' };
+}
+function saveSettings(){
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+let state = loadState();
+let settings = loadSettings();
+
+// Migrate the old single-flat-roster shape into the new multi-group shape
+// (each group is its own independent roster + date columns; on export, each
+// group becomes its own tab in the workbook).
+(function migrateToGroups(){
+  if(!state.groups){
+    const legacyRoster = Array.isArray(state.roster) ? state.roster : [];
+    const legacyCols = Array.isArray(state.dateColumns) ? state.dateColumns : [];
+    state.groups = {};
+    state.groupOrder = [];
+    if(legacyRoster.length > 0){
+      const name = (state.fileName && state.fileName.trim()) || 'Imported Roster';
+      state.groups[name] = { dateColumns: legacyCols, roster: legacyRoster };
+      state.groupOrder.push(name);
+      state.activeGroupId = name;
+    } else {
+      state.activeGroupId = null;
+    }
+    delete state.roster;
+    delete state.dateColumns;
+  }
+  if(!Array.isArray(state.groupOrder)) state.groupOrder = Object.keys(state.groups);
+  if(state.activeGroupId === undefined || (state.activeGroupId && !state.groups[state.activeGroupId])){
+    state.activeGroupId = state.groupOrder[0] || null;
+  }
+  saveState();
+})();
+
+function currentGroup(){
+  return (state.activeGroupId && state.groups[state.activeGroupId]) ? state.groups[state.activeGroupId] : null;
+}
+
+// Migrate older records where attendance[col] was a single time string
+// into the {in:'', out:''} shape used for Time In / Time Out tracking.
+(function migrateAttendanceShape(){
+  let changed = false;
+  Object.values(state.groups).forEach(g=>{
+    (g.roster||[]).forEach(s=>{
+      s.attendance = s.attendance || {};
+      Object.keys(s.attendance).forEach(col=>{
+        const v = s.attendance[col];
+        if(typeof v === 'string'){
+          s.attendance[col] = { in: v, out: '' };
+          changed = true;
+        }
+      });
+    });
+  });
+  if(changed) saveState();
+})();
+
+let scanMode = (state.scanMode === 'out') ? 'out' : 'in';
+// Defaults to whichever period we saved last time; if this is the very first
+// run, guess from the current clock time (before noon -> AM, else PM).
+let sessionPeriod = state.sessionPeriod || (new Date().getHours() < 12 ? 'AM' : 'PM');
+
+/* ============================== Android app bridge ==============================
+   When this page is loaded inside the native Android wrapper, MainActivity injects
+   a JS object called `AndroidBridge` (see WebAppInterface.kt). We feature-detect it
+   so this exact same HTML file keeps working as a normal website too. */
+const AndroidHost = (typeof AndroidBridge !== 'undefined') ? AndroidBridge : null;
+
+function blobToBase64(blob){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = ()=> resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/* ============================== Helpers ============================== */
+function $(id){ return document.getElementById(id); }
+function normalizeId(str){ return (str||'').toString().trim().toUpperCase().replace(/\s+/g,''); }
+function todayLabel(){
+  return new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function formatTime(d){
+  let h=d.getHours(); const m=d.getMinutes().toString().padStart(2,'0');
+  const ampm = h>=12?'PM':'AM'; h=h%12; if(h===0)h=12;
+  return `${h}:${m} ${ampm}`;
+}
+function sanitizeFilename(name){
+  const cleaned = (name||'Attendance').trim().replace(/[\\/:*?"<>|]+/g,'-').slice(0,120);
+  return cleaned || 'Attendance';
+}
+function extractId(raw){
+  const m = (raw||'').match(/\b(\d{2}-\d{4,6})\b/);
+  return m ? m[1] : (raw||'').trim();
+}
+
+function showToast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._tm);
+  showToast._tm = setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+function beep(freq, duration){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    beep.ctx = beep.ctx || new Ctx();
+    const ctx = beep.ctx;
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.frequency.value = freq; osc.type='sine';
+    osc.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration/1000);
+    osc.stop(ctx.currentTime + duration/1000);
+  }catch(e){}
+}
+function vibrate(pattern){ try{ if(navigator.vibrate) navigator.vibrate(pattern); }catch(e){} }
+
+/* ============================== Groups ============================== */
+function sanitizeGroupName(name){
+  return (name||'').toString().trim().replace(/\s+/g,' ').slice(0,60);
+}
+function groupExists(name){
+  return Object.prototype.hasOwnProperty.call(state.groups, name);
+}
+function createGroup(name){
+  const clean = sanitizeGroupName(name);
+  if(!clean) return null;
+  if(!state.groups[clean]){
+    state.groups[clean] = { dateColumns: [], roster: [] };
+    state.groupOrder.push(clean);
+  }
+  state.activeGroupId = clean;
+  saveState();
+  return clean;
+}
+function deleteGroup(name){
+  delete state.groups[name];
+  state.groupOrder = state.groupOrder.filter(g=>g!==name);
+  if(state.activeGroupId === name){
+    state.activeGroupId = state.groupOrder[0] || null;
+  }
+  saveState();
+}
+function switchActiveGroup(name){
+  if(!state.groups[name]) return;
+  state.activeGroupId = name;
+  saveState();
+  renderTable();
+}
+function renderGroupTabs(){
+  const wrap = $('groupTabs');
+  wrap.innerHTML = '';
+  if(state.groupOrder.length === 0){
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  state.groupOrder.forEach(name=>{
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'group-tab' + (name === state.activeGroupId ? ' active' : '');
+
+    const label = document.createElement('span');
+    label.textContent = `${name} (${state.groups[name].roster.length})`;
+    tab.appendChild(label);
+
+    const x = document.createElement('span');
+    x.className = 'group-tab-x';
+    x.textContent = '×';
+    x.title = `Delete "${name}"`;
+    x.onclick = (e)=>{
+      e.stopPropagation();
+      const count = state.groups[name].roster.length;
+      if(confirm(`Delete the group "${name}"? This permanently removes its ${count} student(s) and all logged attendance. This cannot be undone.`)){
+        deleteGroup(name);
+        renderTable();
+        showToast(`Deleted "${name}"`);
+      }
+    };
+    tab.appendChild(x);
+
+    tab.onclick = ()=> switchActiveGroup(name);
+    wrap.appendChild(tab);
+  });
+}
+
+/* ============================== Roster ops (act on the active group) ============================== */
+function findStudent(key){
+  const g = currentGroup();
+  return g ? g.roster.find(s=>s.key===key) : undefined;
+}
+
+// Searches every group (not just the active one) — this is what lets scanning
+// auto-detect which group a student belongs to, so you never have to switch
+// tabs before scanning a mixed batch of students.
+function findStudentAcrossGroups(key){
+  for(const name of state.groupOrder){
+    const g = state.groups[name];
+    const s = g.roster.find(x=>x.key===key);
+    if(s) return { groupName: name, student: s };
+  }
+  return null;
+}
+
+function ensureColumn(label){
+  const g = currentGroup();
+  if(g && !g.dateColumns.includes(label)) g.dateColumns.push(label);
+}
+
+function addOrUpdateStudent(id, name, markPresentForKey, mode){
+  const g = currentGroup();
+  if(!g) return null;
+  const key = normalizeId(id);
+  if(!key) return null;
+  let s = g.roster.find(x=>x.key===key);
+  if(s){
+    if(name) s.name = name;
+  } else {
+    s = { id: id.trim(), key, name: (name||'').trim(), attendance:{} };
+    g.roster.push(s);
+  }
+  if(markPresentForKey){
+    const m = (mode === 'out') ? 'out' : 'in';
+    ensureColumn(markPresentForKey);
+    if(!s.attendance[markPresentForKey]) s.attendance[markPresentForKey] = { in:'', out:'' };
+    if(!s.attendance[markPresentForKey][m]) s.attendance[markPresentForKey][m] = formatTime(new Date());
+  }
+  saveState();
+  return s;
+}
+
+function deleteStudent(key){
+  const g = currentGroup();
+  if(!g) return;
+  g.roster = g.roster.filter(s=>s.key!==key);
+  saveState();
+  renderTable();
+}
+
+function deleteColumn(label){
+  const g = currentGroup();
+  if(!g) return;
+  g.dateColumns = g.dateColumns.filter(c=>c!==label);
+  g.roster.forEach(s=>{ delete s.attendance[label]; });
+  saveState();
+  renderTable();
+}
+
+/* ============================== Import roster ============================== */
+let pendingImportWorkbook = null;
+
+function openImportModal(fileName){
+  const base = fileName.replace(/\.[^.]+$/, '');
+  $('importGroupInput').value = sanitizeGroupName(base);
+  renderImportGroupChips();
+  updateImportConfirmLabel();
+  $('importModalBackdrop').classList.add('open');
+  setTimeout(()=>$('importGroupInput').focus(), 50);
+}
+function closeImportModal(){
+  $('importModalBackdrop').classList.remove('open');
+}
+function renderImportGroupChips(){
+  const wrap = $('importGroupChips');
+  wrap.innerHTML = '';
+  if(state.groupOrder.length === 0){
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  state.groupOrder.forEach(name=>{
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'group-chip';
+    chip.textContent = name;
+    chip.onclick = ()=>{ $('importGroupInput').value = name; updateImportConfirmLabel(); };
+    wrap.appendChild(chip);
+  });
+}
+function updateImportConfirmLabel(){
+  const name = sanitizeGroupName($('importGroupInput').value);
+  const btn = $('importConfirmBtn');
+  if(!name){ btn.textContent = 'Import'; return; }
+  btn.textContent = groupExists(name) ? `Add to "${name}"` : `Create "${name}" & Import`;
+}
+
+function openMultiImportModal(sheetNames){
+  const wrap = $('multiImportChips');
+  wrap.innerHTML = '';
+  sheetNames.forEach(name=>{
+    const chip = document.createElement('span');
+    chip.className = 'group-chip';
+    chip.style.cursor = 'default';
+    chip.textContent = sanitizeGroupName(name) || name;
+    wrap.appendChild(chip);
+  });
+  $('multiImportSub').textContent = `This file has ${sheetNames.length} worksheet tabs — each one becomes its own group:`;
+  $('multiImportModalBackdrop').classList.add('open');
+}
+function closeMultiImportModal(){
+  $('multiImportModalBackdrop').classList.remove('open');
+}
+
+// Parses one worksheet's rows (column A = name, column B = student ID) into
+// the given group, creating it if needed. Shared by both the single-group
+// import flow and the multi-sheet auto-detect flow below.
+function importSheetIntoGroup(wb, sheetName, groupName){
+  const ws = wb.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  createGroup(groupName);
+  let added=0, updated=0;
+  rows.forEach((row, idx)=>{
+    if(!row || row.length===0) return;
+    const c0 = (row[0]||'').toString().trim();
+    const c1 = (row[1]||'').toString().trim();
+    if(!c0 && !c1) return;
+    if(idx===0){
+      const low0 = c0.toLowerCase(), low1 = c1.toLowerCase();
+      if(low0.includes('name') || low1.includes('id') || low1.includes('student')) return; // skip header row
+    }
+    const name = c0, id = c1;
+    if(!id) return;
+    const key = normalizeId(id);
+    const existed = !!findStudent(key);
+    addOrUpdateStudent(id, name, null);
+    if(existed) updated++; else added++;
+  });
+  return { added, updated };
+}
+
+/* ============================== Scanning ============================== */
+let html5QrCode = null;
+let isScanning = false;
+let currentFacingMode = 'environment';
+let lastScan = { text:null, time:0 };
+let modalOpen = false;
+
+function getSessionLabel(){
+  const v = $('sessionLabelInput').value.trim();
+  const base = v || todayLabel();
+  return `${base} (${sessionPeriod})`;
+}
+
+function modeLabel(m){ return m === 'out' ? 'Time Out' : 'Time In'; }
+
+function setScanMode(mode){
+  scanMode = (mode === 'out') ? 'out' : 'in';
+  state.scanMode = scanMode;
+  saveState();
+  $('modeInBtn').classList.toggle('active', scanMode === 'in');
+  $('modeOutBtn').classList.toggle('active', scanMode === 'out');
+  updateModalMarkPresentLabel();
+}
+
+function setSessionPeriod(period){
+  sessionPeriod = (period === 'PM') ? 'PM' : 'AM';
+  state.sessionPeriod = sessionPeriod;
+  saveState();
+  $('periodAmBtn').classList.toggle('active', sessionPeriod === 'AM');
+  $('periodPmBtn').classList.toggle('active', sessionPeriod === 'PM');
+  renderTable();
+}
+
+function updateModalMarkPresentLabel(){
+  const lbl = $('modalMarkPresentLabel');
+  if(lbl) lbl.textContent = `Mark ${modeLabel(scanMode)} for today's session`;
+}
+
+function setResultBanner(kind, icon, title, sub){
+  const el = $('resultBanner');
+  el.className = 'result-banner' + (kind ? ' '+kind : '');
+  $('rbIcon').textContent = icon;
+  $('rbTitle').textContent = title;
+  $('rbSub').textContent = sub;
+}
+function resetResultBannerSoon(){
+  clearTimeout(resetResultBannerSoon._tm);
+  resetResultBannerSoon._tm = setTimeout(()=>{
+    setResultBanner('', '📷', 'Ready to scan', 'Logged entries will appear in the table below');
+  }, 2000);
+}
+
+function handleDecodedText(rawText){
+  const now = Date.now();
+  if(rawText === lastScan.text && (now - lastScan.time) < CONFIG.DUPLICATE_SCAN_COOLDOWN_MS) return;
+  lastScan = { text: rawText, time: now };
+  if(modalOpen) return;
+  processScannedCode(rawText);
+}
+
+function processScannedCode(rawText){
+  const id = extractId(rawText);
+  const key = normalizeId(id);
+  const sessionKey = getSessionLabel();
+  const found = findStudentAcrossGroups(key);
+
+  if(!found){
+    beep(320,160); vibrate(120);
+    setResultBanner('unknown', '⚠️', 'ID not in any group', id);
+    openAddModal({ id, name:'', markPresent:true, fromScan:true });
+    return;
+  }
+
+  // Bring the matching group's tab into view so the log update is visible
+  // right away — this is what lets you scan a mixed batch of students from
+  // different groups without ever having to switch tabs yourself.
+  if(state.activeGroupId !== found.groupName) state.activeGroupId = found.groupName;
+
+  const student = found.student;
+  ensureColumn(sessionKey); // acts on currentGroup(), which now resolves to found.groupName
+  if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
+  const rec = student.attendance[sessionKey];
+  if(rec[scanMode]){
+    beep(520,120); vibrate([30,40,30]);
+    setResultBanner('duplicate', '🔁', `${modeLabel(scanMode)} already logged`, `${student.name || student.id} (${found.groupName}) — ${rec[scanMode]}`);
+    saveState();
+    renderTable();
+  } else {
+    rec[scanMode] = formatTime(new Date());
+    saveState();
+    renderTable();
+    beep(880,140); vibrate(40);
+    setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${found.groupName} · ${student.id} — ${rec[scanMode]}`);
+  }
+  resetResultBannerSoon();
+}
+
+function onScanSuccess(decodedText){ handleDecodedText(decodedText); }
+function onScanFailure(){ /* fired continuously while no code is found — ignore */ }
+
+async function startScanning(){
+  if(typeof Html5Qrcode === 'undefined'){
+    alert('Camera library failed to load. Check your internet connection and reload the page.');
+    return;
+  }
+  if(!html5QrCode) html5QrCode = new Html5Qrcode('qr-reader', { verbose:false });
+  const cfg = { fps:10, qrbox:{ width:230, height:230 } };
+  try{
+    await html5QrCode.start({ facingMode: currentFacingMode }, cfg, onScanSuccess, onScanFailure);
+    isScanning = true;
+    $('viewfinder').classList.add('is-scanning');
+    $('vfPlaceholder').classList.add('hidden');
+    $('startBtn').classList.add('hidden');
+    $('stopBtn').classList.remove('hidden');
+    $('switchCamBtn').classList.remove('hidden');
+    populateCameraList();
+  }catch(err){
+    console.error(err);
+    const name = (err && err.name) ? err.name : '';
+
+    if(!window.isSecureContext){
+      // This is the only case where HTTPS is actually the real problem —
+      // checked directly via the browser's own secure-context flag rather than guessing.
+      alert('This page isn\'t loaded over a secure connection (HTTPS), which camera access requires.');
+      return;
+    }
+    if(name === 'NotAllowedError'){
+      alert('Camera permission was denied for this site.\n\nOn iOS Safari: tap the "aA" icon in the address bar → Website Settings → Camera → Allow, then reload the page.');
+      return;
+    }
+    if(name === 'NotFoundError'){
+      alert('No camera was found on this device.');
+      return;
+    }
+    if(name === 'NotReadableError'){
+      alert('The camera seems to be in use by another app. Close other apps that might be using it and try again.');
+      return;
+    }
+
+    // html5-qrcode doesn't always throw a standard Error — sometimes it's a
+    // plain string, sometimes a plain object — so pull out whatever detail
+    // actually exists instead of assuming .message is there.
+    let detail = '';
+    if(typeof err === 'string') detail = err;
+    else if(err && err.message) detail = err.message;
+    else if(err){ try{ detail = JSON.stringify(err); }catch(e){ detail = String(err); } }
+
+    alert(
+      'Could not start the camera' + (name ? ' (' + name + ')' : '') + '.' +
+      (detail ? '\n\nDetails: ' + detail : '') +
+      '\n\nOn iOS Safari, check: tap the "aA" icon in the address bar → Website Settings → Camera → Allow, then reload.'
+    );
+  }
+}
+
+async function stopScanning(){
+  if(html5QrCode && isScanning){
+    try{ await html5QrCode.stop(); }catch(e){}
+  }
+  isScanning = false;
+  $('viewfinder').classList.remove('is-scanning');
+  $('vfPlaceholder').classList.remove('hidden');
+  $('startBtn').classList.remove('hidden');
+  $('stopBtn').classList.add('hidden');
+  $('switchCamBtn').classList.add('hidden');
+}
+
+async function switchCamera(){
+  currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+  if(isScanning){
+    await stopScanning();
+    await startScanning();
+  }
+}
+
+async function populateCameraList(){
+  try{
+    const devices = await Html5Qrcode.getCameras();
+    if(devices && devices.length > 1){
+      const sel = $('cameraSelect');
+      sel.innerHTML = '';
+      devices.forEach(d=>{
+        const opt = document.createElement('option');
+        opt.value = d.id; opt.textContent = d.label || d.id;
+        sel.appendChild(opt);
+      });
+      $('cameraSelectWrap').classList.remove('hidden');
+    }
+  }catch(e){ /* device enumeration optional, ignore failures */ }
+}
+
+/* ============================== Table render ============================== */
+function renderTable(){
+  const group = currentGroup();
+  const roster = group ? group.roster : [];
+  const dateColumns = group ? group.dateColumns : [];
+
+  const search = ($('searchInput').value || '').trim().toLowerCase();
+  const headRow = $('tableHeadRow');
+  const subHeadRow = $('tableSubHeadRow');
+  const body = $('tableBody');
+  headRow.innerHTML = '';
+  subHeadRow.innerHTML = '';
+  body.innerHTML = '';
+
+  const thName = document.createElement('th'); thName.className='col-name'; thName.rowSpan=2; thName.textContent='Name';
+  const thId = document.createElement('th'); thId.className='col-id'; thId.rowSpan=2; thId.textContent='Student ID';
+  headRow.appendChild(thName); headRow.appendChild(thId);
+
+  dateColumns.forEach(col=>{
+    const th = document.createElement('th');
+    th.colSpan = 2;
+    const wrap = document.createElement('span'); wrap.className='date-th-wrap';
+    const txt = document.createElement('span'); txt.textContent = col;
+    const x = document.createElement('span'); x.className='date-th-x'; x.textContent='×';
+    x.title = 'Remove this column';
+    x.onclick = ()=>{ if(confirm(`Remove the "${col}" column from the log? This deletes those time records.`)) deleteColumn(col); };
+    wrap.appendChild(txt); wrap.appendChild(x);
+    th.appendChild(wrap);
+    headRow.appendChild(th);
+
+    const thIn = document.createElement('th'); thIn.className='sub-in'; thIn.textContent='In';
+    const thOut = document.createElement('th'); thOut.className='sub-out'; thOut.textContent='Out';
+    subHeadRow.appendChild(thIn); subHeadRow.appendChild(thOut);
+  });
+  const thAct = document.createElement('th'); thAct.textContent=''; thAct.rowSpan=2; headRow.appendChild(thAct);
+
+  const filtered = roster.filter(s=>{
+    if(!search) return true;
+    return s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search);
+  });
+
+  filtered.sort((a,b)=> a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+  if(filtered.length === 0){
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 3 + dateColumns.length * 2;
+    td.className = 'empty-state';
+    td.textContent = !group
+      ? 'No groups yet — tap Import to bring in a roster, or "+ Add" to create a group and add a student directly.'
+      : (roster.length === 0
+        ? 'No students in this group yet — import a roster file or add students manually.'
+        : 'No matches for your search.');
+    tr.appendChild(td);
+    body.appendChild(tr);
+  } else {
+    filtered.forEach(s=>{
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td'); tdName.className='col-name'; tdName.textContent = s.name || '(no name)';
+      const tdId = document.createElement('td'); tdId.className='col-id'; tdId.textContent = s.id;
+      tr.appendChild(tdName); tr.appendChild(tdId);
+      dateColumns.forEach(col=>{
+        const rec = s.attendance[col] || {};
+        const tdIn = document.createElement('td'); tdIn.className = 'col-in ' + (rec.in ? 'present' : 'empty-cell');
+        tdIn.textContent = rec.in || '—';
+        if(rec.in){
+          tdIn.classList.add('editable-cell');
+          tdIn.title = 'Tap to clear this Time In (e.g. if scanned by mistake)';
+          tdIn.onclick = ()=>{
+            if(confirm(`Clear ${s.name || s.id}'s Time In for "${col}" (currently ${rec.in})?\n\nThis can't be undone.`)){
+              s.attendance[col].in = '';
+              saveState();
+              renderTable();
+              showToast('Cleared');
+            }
+          };
+        }
+        const tdOut = document.createElement('td'); tdOut.className = 'col-out ' + (rec.out ? 'present out-cell' : 'empty-cell');
+        tdOut.textContent = rec.out || '—';
+        if(rec.out){
+          tdOut.classList.add('editable-cell');
+          tdOut.title = 'Tap to clear this Time Out (e.g. if scanned by mistake)';
+          tdOut.onclick = ()=>{
+            if(confirm(`Clear ${s.name || s.id}'s Time Out for "${col}" (currently ${rec.out})?\n\nThis can't be undone.`)){
+              s.attendance[col].out = '';
+              saveState();
+              renderTable();
+              showToast('Cleared');
+            }
+          };
+        }
+        tr.appendChild(tdIn); tr.appendChild(tdOut);
+      });
+      const tdAct = document.createElement('td'); tdAct.className='col-actions';
+      const editBtn = document.createElement('button'); editBtn.className='row-icon-btn'; editBtn.textContent='✎'; editBtn.title='Rename';
+      editBtn.onclick = ()=>{
+        const newName = prompt('Full name', s.name);
+        if(newName !== null){ s.name = newName.trim(); saveState(); renderTable(); }
+      };
+      const delBtn = document.createElement('button'); delBtn.className='row-icon-btn'; delBtn.textContent='🗑'; delBtn.title='Delete';
+      delBtn.onclick = ()=>{ if(confirm(`Remove ${s.name || s.id} from the roster?`)) deleteStudent(s.key); };
+      tdAct.appendChild(editBtn); tdAct.appendChild(delBtn);
+      tr.appendChild(tdAct);
+      body.appendChild(tr);
+    });
+  }
+
+  const sessionKey = getSessionLabel();
+  const inCount = roster.filter(s=>s.attendance[sessionKey] && s.attendance[sessionKey].in).length;
+  const outCount = roster.filter(s=>s.attendance[sessionKey] && s.attendance[sessionKey].out).length;
+  $('countChip').textContent = `${inCount} in · ${outCount} out / ${roster.length}`;
+
+  renderGroupTabs();
+  positionSubHeader();
+}
+
+// Keeps the "In / Out" sub-header row pinned just below the main sticky header row.
+function positionSubHeader(){
+  const raf = window.requestAnimationFrame || (fn=>setTimeout(fn,0));
+  raf(()=>{
+    const headRow = $('tableHeadRow');
+    const subHeadRow = $('tableSubHeadRow');
+    if(!headRow || !subHeadRow || !subHeadRow.children.length) return;
+    // The date-group <th> cells (colspan, no rowspan) reflect row 1's own height.
+    const groupTh = headRow.querySelector('th:not([rowspan])');
+    const offset = groupTh ? groupTh.getBoundingClientRect().height : 0;
+    Array.from(subHeadRow.children).forEach(th=>{ th.style.top = offset + 'px'; });
+  });
+}
+
+/* ============================== Modal (add student / unknown id) ============================== */
+function populateModalGroupField(){
+  $('modalGroupInput').value = state.activeGroupId || '';
+  const wrap = $('modalGroupChips');
+  wrap.innerHTML = '';
+  if(state.groupOrder.length === 0){
+    wrap.classList.add('hidden');
+    return;
+  }
+  wrap.classList.remove('hidden');
+  state.groupOrder.forEach(name=>{
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'group-chip';
+    chip.textContent = name;
+    chip.onclick = ()=>{ $('modalGroupInput').value = name; };
+    wrap.appendChild(chip);
+  });
+}
+function openAddModal({ id='', name='', markPresent=false, fromScan=false }){
+  modalOpen = true;
+  $('modalTitle').textContent = fromScan ? 'Unrecognized QR code' : 'Add student';
+  $('modalSub').textContent = fromScan
+    ? 'This ID isn\'t in any group yet. Add it now?'
+    : 'Add a new entry to the roster.';
+  $('modalIdInput').value = id;
+  $('modalNameInput').value = name;
+  populateModalGroupField();
+  $('modalMarkPresent').checked = markPresent;
+  updateModalMarkPresentLabel();
+  $('modalBackdrop').classList.add('open');
+  setTimeout(()=>$('modalNameInput').focus(), 50);
+}
+function closeAddModal(){
+  modalOpen = false;
+  $('modalBackdrop').classList.remove('open');
+}
+function confirmAddModal(){
+  const id = $('modalIdInput').value.trim();
+  const name = $('modalNameInput').value.trim();
+  if(!id){ alert('Student ID is required.'); return; }
+  const targetGroup = sanitizeGroupName($('modalGroupInput').value);
+  if(!targetGroup){ alert('Enter a group name.'); return; }
+  createGroup(targetGroup); // creates it if new, otherwise just makes it the active group
+  const sessionKey = $('modalMarkPresent').checked ? getSessionLabel() : null;
+  const mode = scanMode;
+  const s = addOrUpdateStudent(id, name, sessionKey, mode);
+  renderTable();
+  closeAddModal();
+  if(sessionKey){
+    setResultBanner('success', '✅', `${s.name || s.id} — ${modeLabel(mode)}`, `${targetGroup} · ${s.id} — ${s.attendance[sessionKey][mode]}`);
+    resetResultBannerSoon();
+  }
+  showToast('Saved');
+}
+
+/* ============================== Export: XLSX (styled) ============================== */
+function buildSheetForGroup(group){
+  const headerStyle = { font:{ bold:true, color:{ rgb:'FFFFFF' } }, fill:{ patternType:'solid', fgColor:{ rgb:'0B6E4F' } }, alignment:{ horizontal:'center', vertical:'center' } };
+  const presentStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'C6EFCE' } }, font:{ color:{ rgb:'006100' } }, alignment:{ horizontal:'center' } };
+  const idStyle = { font:{ name:'Consolas' } };
+  const outStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'FBE7E5' } }, font:{ color:{ rgb:'C5413B' } }, alignment:{ horizontal:'center' } };
+
+  const headerRow = [
+    { v:'Name', t:'s', s:headerStyle },
+    { v:'Student ID', t:'s', s:headerStyle }
+  ];
+  group.dateColumns.forEach(c=>{
+    headerRow.push({ v:`${c} - Time In`, t:'s', s:headerStyle });
+    headerRow.push({ v:`${c} - Time Out`, t:'s', s:headerStyle });
+  });
+
+  const dataRows = group.roster
+    .slice()
+    .sort((a,b)=> a.name.localeCompare(b.name))
+    .map(s=>{
+      const row = [
+        { v:s.name||'', t:'s' },
+        { v:s.id||'', t:'s', s:idStyle }
+      ];
+      group.dateColumns.forEach(c=>{
+        const rec = s.attendance[c] || {};
+        row.push(rec.in ? { v:rec.in, t:'s', s:presentStyle } : { v:'', t:'s' });
+        row.push(rec.out ? { v:rec.out, t:'s', s:outStyle } : { v:'', t:'s' });
+      });
+      return row;
+    });
+
+  const aoa = [headerRow, ...dataRows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const dateColWidths = [];
+  group.dateColumns.forEach(()=>{ dateColWidths.push({ wch:11 }, { wch:11 }); });
+  ws['!cols'] = [{ wch:30 }, { wch:14 }, ...dateColWidths];
+  return ws;
+}
+
+// Excel sheet names: max 31 chars, no \ / ? * [ ] : , and must be unique per workbook.
+function sanitizeSheetName(name, usedNames){
+  let clean = (name||'Sheet').replace(/[\\\/\?\*\[\]:]/g,'-').trim().slice(0,31);
+  if(!clean) clean = 'Sheet';
+  let final = clean, i = 2;
+  while(usedNames.has(final)){
+    const suffix = ` (${i})`;
+    final = clean.slice(0, 31-suffix.length) + suffix;
+    i++;
+  }
+  usedNames.add(final);
+  return final;
+}
+
+function buildWorkbook(){
+  const wb = XLSX.utils.book_new();
+  const usedNames = new Set();
+  if(state.groupOrder.length === 0){
+    // Nothing imported yet — still produce a valid, empty workbook rather than erroring.
+    XLSX.utils.book_append_sheet(wb, buildSheetForGroup({dateColumns:[],roster:[]}), 'Attendance');
+    return wb;
+  }
+  state.groupOrder.forEach(name=>{
+    const ws = buildSheetForGroup(state.groups[name]);
+    const sheetName = sanitizeSheetName(name, usedNames);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  });
+  return wb;
+}
+function exportXLSX(){
+  if(typeof XLSX === 'undefined'){ alert('Spreadsheet library failed to load. Check your internet connection and reload.'); return; }
+  const blob = buildXLSXBlob();
+  downloadBlob(blob, sanitizeFilename($('fileNameInput').value) + '.xlsx');
+}
+function buildXLSXBlob(){
+  const wb = buildWorkbook();
+  const out = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+  return new Blob([out], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+async function downloadBlob(blob, filename){
+  if(AndroidHost && AndroidHost.saveAndShareFile){
+    // Inside the Android app: hand the file to the native side, which saves it
+    // to app cache and opens the system share sheet (Drive, Gmail, etc.)
+    try{
+      const base64 = await blobToBase64(blob);
+      AndroidHost.saveAndShareFile(base64, filename, blob.type || 'application/octet-stream');
+    }catch(e){
+      console.error(e);
+      alert('Could not prepare the file to share.');
+    }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+
+/* ============================== Settings drawer ============================== */
+function openDrawer(){
+  $('drawerBackdrop').classList.add('open');
+  $('drawer').classList.add('open');
+}
+function closeDrawer(){
+  $('drawerBackdrop').classList.remove('open');
+  $('drawer').classList.remove('open');
+}
+
+/* ============================== Init ============================== */
+function init(){
+  if(typeof Html5Qrcode === 'undefined' || typeof XLSX === 'undefined'){
+    $('libError').textContent = 'Some required libraries failed to load. Check your internet connection and reload this page.';
+    $('libError').classList.remove('hidden');
+  }
+  $('buildTag').textContent = `Build: ${BUILD_TAG}`;
+
+  applyAppName();
+  $('appNameInput').value = settings.appName || '';
+  $('appNameInput').addEventListener('input', ()=>{
+    settings.appName = $('appNameInput').value;
+    saveSettings();
+    applyAppName();
+  });
+
+  $('fileNameInput').value = state.fileName || '';
+  $('sessionLabelInput').value = todayLabel();
+
+  $('fileNameInput').addEventListener('input', ()=>{ state.fileName = $('fileNameInput').value; saveState(); });
+  $('sessionLabelInput').addEventListener('input', renderTable);
+  $('searchInput').addEventListener('input', renderTable);
+
+  $('modeInBtn').addEventListener('click', ()=> setScanMode('in'));
+  $('modeOutBtn').addEventListener('click', ()=> setScanMode('out'));
+  setScanMode(scanMode);
+
+  $('periodAmBtn').addEventListener('click', ()=> setSessionPeriod('AM'));
+  $('periodPmBtn').addEventListener('click', ()=> setSessionPeriod('PM'));
+  setSessionPeriod(sessionPeriod);
+
+  $('startBtn').addEventListener('click', startScanning);
+  $('stopBtn').addEventListener('click', stopScanning);
+  $('switchCamBtn').addEventListener('click', switchCamera);
+  $('cameraSelect').addEventListener('change', async (e)=>{
+    await stopScanning();
+    const cfg = { fps:10, qrbox:{ width:230, height:230 } };
+    html5QrCode = html5QrCode || new Html5Qrcode('qr-reader', { verbose:false });
+    try{
+      await html5QrCode.start(e.target.value, cfg, onScanSuccess, onScanFailure);
+      isScanning = true;
+      $('viewfinder').classList.add('is-scanning');
+      $('vfPlaceholder').classList.add('hidden');
+      $('startBtn').classList.add('hidden');
+      $('stopBtn').classList.remove('hidden');
+      $('switchCamBtn').classList.remove('hidden');
+    }catch(err){ console.error(err); }
+  });
+
+  function submitManualId(){
+    if(modalOpen) return;
+    const input = $('usbScanInput');
+    const val = input.value.trim();
+    input.value = '';
+    if(val) processScannedCode(val);
+    input.focus();
+  }
+  $('usbScanInput').addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter') return;
+    e.preventDefault();
+    submitManualId();
+  });
+  $('manualSubmitBtn').addEventListener('click', submitManualId);
+
+  $('importBtn').addEventListener('click', ()=> $('rosterFile').click());
+  $('rosterFile').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    if(typeof XLSX === 'undefined'){ alert('Spreadsheet library failed to load. Check your internet connection and reload.'); return; }
+    try{
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      pendingImportWorkbook = wb;
+      if(wb.SheetNames.length > 1){
+        openMultiImportModal(wb.SheetNames);
+      } else {
+        openImportModal(file.name);
+      }
+    }catch(err){
+      console.error(err);
+      alert('Could not read that file. Make sure column A is Name and column B is Student ID.');
+    }
+  });
+  $('importGroupInput').addEventListener('input', updateImportConfirmLabel);
+  $('importCancelBtn').addEventListener('click', ()=>{ pendingImportWorkbook = null; closeImportModal(); });
+  $('importModalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='importModalBackdrop'){ pendingImportWorkbook = null; closeImportModal(); } });
+  $('importConfirmBtn').addEventListener('click', ()=>{
+    const name = sanitizeGroupName($('importGroupInput').value);
+    if(!name){ alert('Enter a group name.'); return; }
+    if(!pendingImportWorkbook) return;
+    const wb = pendingImportWorkbook;
+    closeImportModal();
+    const { added, updated } = importSheetIntoGroup(wb, wb.SheetNames[0], name);
+    saveState();
+    renderTable();
+    showToast(`Imported into "${name}": ${added} added, ${updated} updated`);
+    pendingImportWorkbook = null;
+  });
+
+  $('multiImportCancelBtn').addEventListener('click', ()=>{ pendingImportWorkbook = null; closeMultiImportModal(); });
+  $('multiImportModalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='multiImportModalBackdrop'){ pendingImportWorkbook = null; closeMultiImportModal(); } });
+  $('multiImportConfirmBtn').addEventListener('click', ()=>{
+    const wb = pendingImportWorkbook;
+    if(!wb) return;
+    closeMultiImportModal();
+    const parts = [];
+    wb.SheetNames.forEach(sheetName=>{
+      const groupName = sanitizeGroupName(sheetName) || sheetName;
+      const { added, updated } = importSheetIntoGroup(wb, sheetName, groupName);
+      parts.push(`${groupName} +${added}${updated ? `/${updated} upd.` : ''}`);
+    });
+    saveState();
+    renderTable();
+    showToast(`Imported ${wb.SheetNames.length} group(s): ${parts.join(' · ')}`);
+    pendingImportWorkbook = null;
+  });
+
+  $('addStudentBtn').addEventListener('click', ()=>{
+    openAddModal({ markPresent:false, fromScan:false });
+  });
+  $('exportXlsxBtn').addEventListener('click', exportXLSX);
+
+  $('modalCancelBtn').addEventListener('click', closeAddModal);
+  $('modalConfirmBtn').addEventListener('click', confirmAddModal);
+  $('modalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='modalBackdrop') closeAddModal(); });
+
+  $('settingsBtn').addEventListener('click', openDrawer);
+  $('drawerBackdrop').addEventListener('click', closeDrawer);
+
+  if(AndroidHost){
+    // Only shown inside the native app, where it hands the Excel file to
+    // Android's native share sheet (Drive, Gmail, WhatsApp, etc.). Not shown
+    // on the plain web version at all.
+    $('shareBtn').classList.remove('hidden');
+    $('shareBtn').addEventListener('click', shareViaAndroid);
+    $('cameraHelpText').textContent = 'If the camera preview stays blank, check that camera permission is allowed for this app in your phone\'s Settings.';
+  }
+
+  $('clearDataBtn').addEventListener('click', ()=>{
+    if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device. Continue?')){
+      state = { fileName:'', scanMode: state.scanMode, sessionPeriod: state.sessionPeriod, groups:{}, groupOrder:[], activeGroupId:null };
+      saveState();
+      $('fileNameInput').value = '';
+      renderTable();
+      showToast('All data cleared');
+    }
+  });
+
+  renderTable();
+}
+
+async function shareViaAndroid(){
+  if(!AndroidHost) return;
+  if(typeof XLSX === 'undefined'){ alert('Spreadsheet library failed to load. Check your internet connection and reload.'); return; }
+  try{
+    const blob = buildXLSXBlob();
+    const base64 = await blobToBase64(blob);
+    const filename = sanitizeFilename($('fileNameInput').value) + '.xlsx';
+    AndroidHost.saveAndShareFile(base64, filename, blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  }catch(e){
+    console.error(e);
+    alert('Could not prepare the file to share.');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  (window.__libsReady || Promise.resolve()).then(init);
+});
+</script>
+</body>
+</html>
