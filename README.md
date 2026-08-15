@@ -47,6 +47,9 @@ Built for schools/orgs that need to track attendance across multiple sections or
 
 ## How to use it
 
+[![Watch the video](https://img.youtube.com/vi/e8GSEoz8zQw/0.jpg)](https://youtu.be/e8GSEoz8zQw)
+
+
 ### 1. Import your first group
 Tap **Import** and pick a roster file (`.xlsx`, `.xls`, or `.csv` — column A = name, column B = student ID).
 - If the file has multiple worksheet tabs, you'll get a summary of every tab found — confirm once and each tab becomes its own group automatically.
