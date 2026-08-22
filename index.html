@@ -51,17 +51,26 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
 .col-left,.col-right{display:contents;}
 
 @media(min-width:960px){
-  .app{max-width:1180px;}
+  html, body{height:100%;}
+  body{display:flex;flex-direction:column;overflow:hidden;}
+  .app{max-width:1180px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;padding-bottom:0;}
+  header.topbar{flex-shrink:0;}
+  #libError{flex-shrink:0;}
   .app-body{
     display:grid;
     grid-template-columns:380px 1fr;
     gap:20px;
-    align-items:start;
+    align-items:stretch;
+    flex:1 1 auto;
+    min-height:0;
   }
-  .col-left{display:flex;flex-direction:column;}
-  .col-right{display:flex;flex-direction:column;}
-  .col-left .card{margin-bottom:20px;}
-  .col-right .table-wrap{max-height:calc(100vh - 260px);}
+  .col-left{display:flex;flex-direction:column;overflow-y:auto;min-height:0;}
+  .col-right{display:flex;flex-direction:column;min-height:0;}
+  .col-left .card{margin-bottom:20px;flex-shrink:0;}
+  .col-left .card:last-child{margin-bottom:0;}
+  .col-right .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-bottom:0;}
+  .col-right .card > *{flex-shrink:0;}
+  .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;max-height:none;}
 }
 
 /* ---------- Header ---------- */
@@ -78,6 +87,7 @@ header.topbar{
 .brand-mark svg{width:20px;height:20px;}
 .brand h1{font-family:var(--font-display);font-size:18px;margin:0;line-height:1.1;}
 .brand p{margin:0;font-size:12px;color:var(--muted);}
+.brand p.watermark{font-size:10px;color:var(--muted);opacity:.65;margin-top:1px;}
 .group-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch;}
 .group-tabs.hidden{display:none;}
 .group-tab{
@@ -273,7 +283,11 @@ td.col-in,td.col-out{min-width:64px;}
 }
 .action-bar .btn{flex:1 1 auto;min-width:0;font-size:13px;padding:0 10px;}
 @media(min-width:960px){
-  .action-bar{left:50%;right:auto;transform:translateX(-50%);width:100%;max-width:1180px;}
+  .action-bar{
+    position:static;left:auto;right:auto;bottom:auto;transform:none;
+    max-width:1180px;margin:0 auto;width:100%;
+    box-shadow:none;flex-shrink:0;
+  }
 }
 
 /* ---------- Settings drawer ---------- */
@@ -327,6 +341,7 @@ td.col-in,td.col-out{min-width:64px;}
       <div>
         <h1 id="appTitle">QR Attendance</h1>
         <p>Scan &middot; Log &middot; Export</p>
+        <p class="watermark">Jan Vincent "Binting" Aningat</p>
       </div>
     </div>
     <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
@@ -570,7 +585,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'robust-camera-error-2026-08-13';
+const BUILD_TAG = 'watermark-2026-08-13';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
