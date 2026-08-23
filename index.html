@@ -585,7 +585,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'watermark-2026-08-13';
+const BUILD_TAG = 'per-date-event-title-2026-08-13';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -669,6 +669,21 @@ function currentGroup(){
   if(changed) saveState();
 })();
 
+// Groups created before per-date event-name tracking existed won't have this
+// map yet — backfill it using the workbook's saved export name as a
+// reasonable best-guess default for their existing date columns.
+(function migrateEventNames(){
+  let changed = false;
+  const fallbackName = (state.fileName && state.fileName.trim()) || 'Attendance';
+  Object.values(state.groups).forEach(g=>{
+    if(!g.eventNames){ g.eventNames = {}; changed = true; }
+    (g.dateColumns||[]).forEach(col=>{
+      if(!g.eventNames[col]){ g.eventNames[col] = fallbackName; changed = true; }
+    });
+  });
+  if(changed) saveState();
+})();
+
 let scanMode = (state.scanMode === 'out') ? 'out' : 'in';
 // Defaults to whichever period we saved last time; if this is the very first
 // run, guess from the current clock time (before noon -> AM, else PM).
@@ -745,7 +760,7 @@ function createGroup(name){
   const clean = sanitizeGroupName(name);
   if(!clean) return null;
   if(!state.groups[clean]){
-    state.groups[clean] = { dateColumns: [], roster: [] };
+    state.groups[clean] = { dateColumns: [], roster: [], eventNames: {} };
     state.groupOrder.push(clean);
   }
   state.activeGroupId = clean;
@@ -823,7 +838,17 @@ function findStudentAcrossGroups(key){
 
 function ensureColumn(label){
   const g = currentGroup();
-  if(g && !g.dateColumns.includes(label)) g.dateColumns.push(label);
+  if(!g) return;
+  if(!g.eventNames) g.eventNames = {};
+  if(!g.dateColumns.includes(label)){
+    g.dateColumns.push(label);
+    // Snapshot whatever's in the Export file name field right now — this is
+    // what lets each date's columns carry the event name that was active
+    // when that session was actually recorded, even if the field gets
+    // changed later for a different day/event.
+    const nameField = $('fileNameInput');
+    g.eventNames[label] = (nameField && nameField.value.trim()) || 'Attendance';
+  }
 }
 
 function addOrUpdateStudent(id, name, markPresentForKey, mode){
@@ -1326,6 +1351,8 @@ function confirmAddModal(){
 
 /* ============================== Export: XLSX (styled) ============================== */
 function buildSheetForGroup(group){
+  const titleStyle = { font:{ bold:true, sz:12, color:{ rgb:'0B6E4F' } }, alignment:{ horizontal:'center', vertical:'center' }, fill:{ patternType:'solid', fgColor:{ rgb:'DFF3EA' } } };
+  const blankTitleStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'FFFFFF' } } };
   const headerStyle = { font:{ bold:true, color:{ rgb:'FFFFFF' } }, fill:{ patternType:'solid', fgColor:{ rgb:'0B6E4F' } }, alignment:{ horizontal:'center', vertical:'center' } };
   const presentStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'C6EFCE' } }, font:{ color:{ rgb:'006100' } }, alignment:{ horizontal:'center' } };
   const idStyle = { font:{ name:'Consolas' } };
@@ -1356,8 +1383,27 @@ function buildSheetForGroup(group){
       return row;
     });
 
-  const aoa = [headerRow, ...dataRows];
+  // Title row: sits only above each date's own Time In/Out pair (using
+  // whichever event name was active when that date was recorded), not over
+  // Name/Student ID — so a sheet spanning multiple events shows each one
+  // labeled correctly above its own columns instead of one name over everything.
+  const eventNames = group.eventNames || {};
+  const titleRow = [
+    { v:'', t:'s', s:blankTitleStyle },
+    { v:'', t:'s', s:blankTitleStyle }
+  ];
+  const merges = [];
+  group.dateColumns.forEach((c, i)=>{
+    const colIndex = 2 + i*2; // 0-indexed column where this date's "Time In" cell lands
+    const label = eventNames[c] || 'Attendance';
+    titleRow.push({ v:label, t:'s', s:titleStyle });
+    titleRow.push({ v:'', t:'s', s:titleStyle });
+    merges.push({ s:{r:0,c:colIndex}, e:{r:0,c:colIndex+1} });
+  });
+
+  const aoa = [titleRow, headerRow, ...dataRows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges;
   const dateColWidths = [];
   group.dateColumns.forEach(()=>{ dateColWidths.push({ wch:11 }, { wch:11 }); });
   ws['!cols'] = [{ wch:30 }, { wch:14 }, ...dateColWidths];
