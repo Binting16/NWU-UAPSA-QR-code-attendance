@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0B6E4F">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>QR Attendance Scanner</title>
+<title>QR Code Attendance</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,6 +71,14 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
   .col-right .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-bottom:0;}
   .col-right .card > *{flex-shrink:0;}
   .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;max-height:none;}
+}
+
+/* Extra breathing room on large monitors (e.g. 1920x1080 at 100% scale) --
+   the fixed-width left column stays put, so this space goes straight to the
+   table (the 1fr column), giving more date columns room before needing to
+   scroll horizontally. */
+@media(min-width:1440px){
+  .app{max-width:1600px;}
 }
 
 /* ---------- Header ---------- */
@@ -251,8 +259,17 @@ thead th{
   font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;
   padding:10px 10px;white-space:nowrap;z-index:1;
 }
-th.col-name,td.col-name{position:sticky;left:0;z-index:2;background:var(--surface);min-width:160px;text-align:left;font-family:var(--font-body);font-weight:500;}
-th.col-id,td.col-id{position:sticky;left:160px;z-index:2;background:var(--surface);min-width:96px;}
+th.col-name,td.col-name{
+  position:sticky;left:0;z-index:2;background:var(--surface);
+  width:var(--name-col-width,160px);min-width:var(--name-col-width,160px);max-width:var(--name-col-width,160px);
+  text-align:left;font-family:var(--font-body);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+th.col-id,td.col-id{
+  position:sticky;left:var(--name-col-width,160px);z-index:2;background:var(--surface);
+  width:var(--id-col-width,96px);min-width:var(--id-col-width,96px);max-width:var(--id-col-width,96px);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
 thead th.col-name,thead th.col-id{background:var(--primary);color:#fff;z-index:3;}
 td{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:center;}
 tbody tr:last-child td{border-bottom:none;}
@@ -288,6 +305,9 @@ td.col-in,td.col-out{min-width:64px;}
     max-width:1180px;margin:0 auto;width:100%;
     box-shadow:none;flex-shrink:0;
   }
+}
+@media(min-width:1440px){
+  .action-bar{max-width:1600px;}
 }
 
 /* ---------- Settings drawer ---------- */
@@ -339,7 +359,7 @@ td.col-in,td.col-out{min-width:64px;}
         </svg>
       </div>
       <div>
-        <h1 id="appTitle">QR Attendance</h1>
+        <h1 id="appTitle">QR Code Attendance</h1>
         <p>Scan &middot; Log &middot; Export</p>
         <p class="watermark">Jan Vincent "Binting" Aningat</p>
       </div>
@@ -360,7 +380,7 @@ td.col-in,td.col-out{min-width:64px;}
         <p class="card-title"><span class="tick"></span>Session</p>
         <div class="field">
           <label for="fileNameInput">Export file name (event or date)</label>
-          <input type="text" id="fileNameInput" placeholder="e.g. Freshmen Orientation 2026">
+          <input type="text" id="fileNameInput" placeholder="e.g. Weekly Meeting 2026">
           <p class="help-text">Every group becomes its own tab inside this one Excel file.</p>
         </div>
         <div class="field">
@@ -463,8 +483,19 @@ td.col-in,td.col-out{min-width:64px;}
 
   <div class="field">
     <label for="appNameInput">App name</label>
-    <input type="text" id="appNameInput" placeholder="QR Attendance">
+    <input type="text" id="appNameInput" placeholder="QR Code Attendance">
     <p class="help-text">Shown at the top of the app. To change the app's name and icon on your phone's home screen, that's a separate native-app step — see the setup guide.</p>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
+    <label>Name &amp; Student ID column width</label>
+    <div class="period-toggle" role="group" aria-label="Column width">
+      <button type="button" class="period-btn" id="colWidthCompactBtn" data-width="compact">Compact</button>
+      <button type="button" class="period-btn active" id="colWidthNormalBtn" data-width="normal">Normal</button>
+      <button type="button" class="period-btn" id="colWidthWideBtn" data-width="wide">Wide</button>
+    </div>
+    <p class="help-text">Narrower leaves more room on screen for date columns; long names get truncated with "..." — hover (or tap) a cell to see the full text.</p>
   </div>
   <div class="divider"></div>
 
@@ -494,7 +525,7 @@ td.col-in,td.col-out{min-width:64px;}
     </div>
     <div class="field">
       <label for="modalGroupInput">Group</label>
-      <input type="text" id="modalGroupInput" placeholder="e.g. BSARCH1A">
+      <input type="text" id="modalGroupInput" placeholder="e.g. Group A">
       <div class="group-chips hidden" id="modalGroupChips"></div>
       <p class="help-text">Type a new name to create a group on the spot, or tap an existing one above to add into it.</p>
     </div>
@@ -516,7 +547,7 @@ td.col-in,td.col-out{min-width:64px;}
     <p class="sub">Which group should these students go into?</p>
     <div class="field">
       <label for="importGroupInput">Group name</label>
-      <input type="text" id="importGroupInput" placeholder="e.g. BSARCH1A">
+      <input type="text" id="importGroupInput" placeholder="e.g. Group A">
       <div class="group-chips hidden" id="importGroupChips"></div>
       <p class="help-text">Type a new name to create a fresh group, or tap an existing one above to add these names into it.</p>
     </div>
@@ -585,7 +616,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'per-date-event-title-2026-08-13';
+const BUILD_TAG = 'colwidth-widescreen-2026-08-14';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -599,10 +630,25 @@ function saveState(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 function applyAppName(){
-  const name = (settings.appName && settings.appName.trim()) || 'QR Attendance';
-  document.title = `${name} Scanner`;
+  const name = (settings.appName && settings.appName.trim()) || 'QR Code Attendance';
+  document.title = name;
   const h1 = $('appTitle');
   if(h1) h1.textContent = name;
+}
+
+const COLUMN_WIDTH_PRESETS = {
+  compact: { name:'110px', id:'80px' },
+  normal:  { name:'160px', id:'96px' },
+  wide:    { name:'220px', id:'120px' }
+};
+function applyColumnWidth(preset){
+  const p = COLUMN_WIDTH_PRESETS[preset] ? preset : 'normal';
+  const vals = COLUMN_WIDTH_PRESETS[p];
+  document.documentElement.style.setProperty('--name-col-width', vals.name);
+  document.documentElement.style.setProperty('--id-col-width', vals.id);
+  ['colWidthCompactBtn','colWidthNormalBtn','colWidthWideBtn'].forEach(id=>{
+    $(id).classList.toggle('active', id === `colWidth${p.charAt(0).toUpperCase()+p.slice(1)}Btn`);
+  });
 }
 
 function loadSettings(){
@@ -1221,8 +1267,8 @@ function renderTable(){
   } else {
     filtered.forEach(s=>{
       const tr = document.createElement('tr');
-      const tdName = document.createElement('td'); tdName.className='col-name'; tdName.textContent = s.name || '(no name)';
-      const tdId = document.createElement('td'); tdId.className='col-id'; tdId.textContent = s.id;
+      const tdName = document.createElement('td'); tdName.className='col-name'; tdName.textContent = s.name || '(no name)'; tdName.title = s.name || '(no name)';
+      const tdId = document.createElement('td'); tdId.className='col-id'; tdId.textContent = s.id; tdId.title = s.id;
       tr.appendChild(tdName); tr.appendChild(tdId);
       dateColumns.forEach(col=>{
         const rec = s.attendance[col] || {};
@@ -1495,6 +1541,16 @@ function init(){
     settings.appName = $('appNameInput').value;
     saveSettings();
     applyAppName();
+  });
+
+  applyColumnWidth(settings.columnWidth || 'normal');
+  ['compact','normal','wide'].forEach(p=>{
+    const btnId = `colWidth${p.charAt(0).toUpperCase()+p.slice(1)}Btn`;
+    $(btnId).addEventListener('click', ()=>{
+      settings.columnWidth = p;
+      saveSettings();
+      applyColumnWidth(p);
+    });
   });
 
   $('fileNameInput').value = state.fileName || '';
