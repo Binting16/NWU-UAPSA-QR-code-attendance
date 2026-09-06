@@ -400,6 +400,7 @@ td.col-in,td.col-out{min-width:64px;}
       <!-- Scanner -->
       <section class="card">
         <p class="card-title"><span class="tick"></span>Scanner</p>
+        <p class="help-text hidden" id="lockedGroupIndicator" style="font-weight:700;color:var(--primary);"></p>
         <div class="scan-mode-toggle" role="group" aria-label="Scan mode">
           <button type="button" class="mode-btn mode-in active" id="modeInBtn" data-mode="in"><span class="dot"></span>Time In</button>
           <button type="button" class="mode-btn mode-out" id="modeOutBtn" data-mode="out"><span class="dot"></span>Time Out</button>
@@ -500,8 +501,29 @@ td.col-in,td.col-out{min-width:64px;}
   <div class="divider"></div>
 
   <div class="field">
+    <label for="sheetsUrlInput">Google Sheets sync (optional)</label>
+    <input type="text" id="sheetsUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+    <p class="help-text">Paste the Web App URL from your deployed Apps Script relay (see setup guide). This connects the app to a shared Google Sheet so multiple people scanning from different devices log into the same file, live.</p>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-ghost" id="sheetsConnectBtn" style="flex:1">Connect</button>
+      <button class="btn btn-ghost" id="sheetsRefreshBtn" style="flex:1">Refresh</button>
+    </div>
+    <div class="checkbox-row" style="margin-top:10px;">
+      <input type="checkbox" id="autoSyncCheckbox">
+      <label for="autoSyncCheckbox">Auto-sync every 30 seconds</label>
+    </div>
+    <p class="help-text" id="sheetsStatusText">Not connected — local-only mode.</p>
+  </div>
+  <div class="field hidden" id="lockedGroupField">
+    <label for="lockedGroupSelect">This device logs into</label>
+    <select id="lockedGroupSelect"></select>
+    <p class="help-text">Restricting each device to one group is what keeps several people scanning at once from colliding with each other on the shared sheet.</p>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
     <label>Data</label>
-    <p class="help-text">Your roster and logs are saved on this device only, in this browser. Importing a roster file merges new students in &mdash; it never erases existing logs.</p>
+    <p class="help-text">Local groups are saved on this device only, in this browser. Sheets-synced groups also live in your Google Sheet. Importing a roster file merges new students in &mdash; it never erases existing logs.</p>
   </div>
   <button class="btn btn-danger btn-block" id="clearDataBtn">Clear all data</button>
 
@@ -616,7 +638,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'colwidth-widescreen-2026-08-14';
+const BUILD_TAG = 'fast-scan-render-2026-08-15';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -624,7 +646,7 @@ function loadState(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return { fileName:'', groups:{}, groupOrder:[], activeGroupId:null };
+  return { fileName:'', groups:{}, groupOrder:[], activeGroupId:null, sheetsUrl:'', lockedGroup:null, pendingSync:[] };
 }
 function saveState(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -656,7 +678,7 @@ function loadSettings(){
     const raw = localStorage.getItem(SETTINGS_KEY);
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return { appName:'' };
+  return { appName:'', autoSync:false };
 }
 function saveSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -689,6 +711,9 @@ let settings = loadSettings();
   if(state.activeGroupId === undefined || (state.activeGroupId && !state.groups[state.activeGroupId])){
     state.activeGroupId = state.groupOrder[0] || null;
   }
+  if(state.sheetsUrl === undefined) state.sheetsUrl = '';
+  if(state.lockedGroup === undefined) state.lockedGroup = null;
+  if(!Array.isArray(state.pendingSync)) state.pendingSync = [];
   saveState();
 })();
 
@@ -802,6 +827,210 @@ function sanitizeGroupName(name){
 function groupExists(name){
   return Object.prototype.hasOwnProperty.call(state.groups, name);
 }
+/* ============================== Google Sheets sync (optional) ==============================
+   Talks to a Google Apps Script "relay" deployed as a Web App (see setup guide).
+   Nobody scanning needs a Google account — the script runs under whoever
+   deployed it, and just exposes a small JSON API this app calls with fetch().
+   Content-Type is deliberately 'text/plain' on POSTs: Apps Script Web Apps
+   don't handle CORS preflight (OPTIONS) requests, and 'text/plain' is a
+   CORS "simple request" that skips the preflight entirely. The script still
+   parses the body as JSON on its end. */
+
+function getSheetsGroups(){
+  return state.groupOrder.filter(name => state.groups[name] && state.groups[name].syncMode === 'sheets');
+}
+
+async function sheetsFetchSnapshot(){
+  const url = (state.sheetsUrl||'').trim();
+  if(!url) throw new Error('No Sheets URL configured');
+  const res = await fetch(`${url}?action=snapshot`);
+  if(!res.ok) throw new Error(`Sheet request failed (${res.status})`);
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Sheet request failed');
+  return data.groups || {};
+}
+
+async function sheetsPost(payload){
+  const url = (state.sheetsUrl||'').trim();
+  if(!url) throw new Error('No Sheets URL configured');
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error(`Sheet request failed (${res.status})`);
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Sheet request failed');
+  return data;
+}
+
+function applySheetsSnapshot(groups){
+  Object.keys(groups).forEach(name=>{
+    const g = groups[name];
+    state.groups[name] = {
+      dateColumns: g.dateColumns || [],
+      eventNames: g.eventNames || {},
+      roster: (g.roster||[]).map(s=>({ id: String(s.id), key: normalizeId(s.id), name: s.name || '', attendance: s.attendance || {} })),
+      syncMode: 'sheets'
+    };
+    if(!state.groupOrder.includes(name)) state.groupOrder.push(name);
+  });
+  if(!state.activeGroupId && state.groupOrder.length) state.activeGroupId = state.groupOrder[0];
+  saveState();
+}
+
+async function connectSheets(){
+  const url = $('sheetsUrlInput').value.trim();
+  if(!url){ alert('Paste your Apps Script Web App URL first.'); return; }
+  state.sheetsUrl = url;
+  saveState();
+  $('sheetsStatusText').textContent = 'Connecting…';
+  try{
+    const groups = await sheetsFetchSnapshot();
+    applySheetsSnapshot(groups);
+    $('sheetsStatusText').textContent = `Connected — ${Object.keys(groups).length} group(s) found.`;
+    renderLockedGroupSelect();
+    renderTable();
+    showToast('Connected to Google Sheet');
+  }catch(err){
+    console.error(err);
+    $('sheetsStatusText').textContent = `Could not connect: ${err.message}`;
+  }
+}
+
+async function refreshSheets(){
+  if(!(state.sheetsUrl||'').trim()){ alert('Connect a Google Sheet first.'); return; }
+  $('sheetsStatusText').textContent = 'Refreshing…';
+  try{
+    const groups = await sheetsFetchSnapshot();
+    applySheetsSnapshot(groups);
+    $('sheetsStatusText').textContent = `Synced just now — ${Object.keys(groups).length} group(s).`;
+    renderLockedGroupSelect();
+    renderTable();
+    showToast('Refreshed from Google Sheet');
+  }catch(err){
+    console.error(err);
+    $('sheetsStatusText').textContent = `Could not refresh: ${err.message}`;
+  }
+}
+
+function renderLockedGroupSelect(){
+  const sheetGroups = getSheetsGroups();
+  const field = $('lockedGroupField');
+  if(sheetGroups.length === 0){
+    field.classList.add('hidden');
+    updateLockedGroupIndicator();
+    return;
+  }
+  field.classList.remove('hidden');
+  const sel = $('lockedGroupSelect');
+  sel.innerHTML = '';
+  const noneOpt = document.createElement('option');
+  noneOpt.value = ''; noneOpt.textContent = '— Select a group —';
+  sel.appendChild(noneOpt);
+  sheetGroups.forEach(name=>{
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    if(name === state.lockedGroup) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  updateLockedGroupIndicator();
+}
+
+function updateLockedGroupIndicator(){
+  const el = $('lockedGroupIndicator');
+  if(state.lockedGroup && state.groups[state.lockedGroup]){
+    const pendingCount = (state.pendingSync||[]).filter(p=>p.group===state.lockedGroup).length;
+    el.textContent = `🔒 This device logs into: ${state.lockedGroup} (synced)` +
+      (pendingCount ? ` — ⏳ ${pendingCount} pending sync${pendingCount>1?'es':''}` : '');
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+/* ---- Background sync + retry queue ----
+   Scanning writes locally first and gives instant feedback (see
+   processScannedCode); the actual write to the Google Sheet happens here,
+   in the background, so network/Apps Script latency never blocks scanning
+   the next person. If a write fails (offline, Sheet busy, etc.) it's queued
+   and retried automatically every 15s without the user having to do anything. */
+
+async function syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, mode, time){
+  const payload = { action:'logAttendance', group: groupName, studentId: student.id, studentName: student.name, sessionLabel: sessionKey, eventName, mode, time };
+  try{
+    const res = await sheetsPost(payload);
+    if(res.duplicate && res.existing && res.existing !== time){
+      // The sheet already had a different value than what we just wrote
+      // locally (e.g. a previous attempt actually succeeded before timing
+      // out) — reconcile so this device matches what's authoritative.
+      const g = state.groups[groupName];
+      const s = g && g.roster.find(x=>x.id===student.id);
+      if(s && s.attendance[sessionKey] && s.attendance[sessionKey][mode] !== res.existing){
+        s.attendance[sessionKey][mode] = res.existing;
+        saveState();
+        renderTable();
+        showToast(`Adjusted ${student.name || student.id} to match the sheet`);
+      }
+    }
+  }catch(err){
+    console.error('Background sync failed, queued for retry:', err);
+    queuePendingSync(payload);
+  }
+}
+
+function queuePendingSync(payload){
+  if(!Array.isArray(state.pendingSync)) state.pendingSync = [];
+  state.pendingSync.push(payload);
+  saveState();
+  updateLockedGroupIndicator();
+}
+
+function removePendingSync(payload){
+  if(!Array.isArray(state.pendingSync)) return;
+  state.pendingSync = state.pendingSync.filter(p=>
+    !(p.action===payload.action && p.group===payload.group && p.studentId===payload.studentId &&
+      p.sessionLabel===payload.sessionLabel && p.mode===payload.mode)
+  );
+  saveState();
+  updateLockedGroupIndicator();
+}
+
+async function retryPendingSyncs(){
+  if(!Array.isArray(state.pendingSync) || state.pendingSync.length === 0) return;
+  if(!(state.sheetsUrl||'').trim()) return;
+  const queue = state.pendingSync.slice();
+  for(const payload of queue){
+    try{
+      await sheetsPost(payload);
+      removePendingSync(payload);
+    }catch(err){
+      console.error('Retry still failing, will try again later:', err);
+    }
+  }
+}
+let retryQueueTimer = setInterval(retryPendingSyncs, 15000);
+
+let autoSyncTimer = null;
+function setAutoSync(enabled){
+  settings.autoSync = enabled;
+  saveSettings();
+  if(autoSyncTimer){ clearInterval(autoSyncTimer); autoSyncTimer = null; }
+  if(enabled && (state.sheetsUrl||'').trim()){
+    autoSyncTimer = setInterval(()=>{
+      // Silent background refresh -- skip the toast/alert noise of a manual refresh.
+      sheetsFetchSnapshot()
+        .then(groups=>{
+          applySheetsSnapshot(groups);
+          $('sheetsStatusText').textContent = `Auto-synced ${new Date().toLocaleTimeString()} — ${Object.keys(groups).length} group(s).`;
+          renderLockedGroupSelect();
+          renderTable();
+        })
+        .catch(err=>console.error('Auto-sync failed:', err));
+    }, 30000);
+  }
+}
+
 function createGroup(name){
   const clean = sanitizeGroupName(name);
   if(!clean) return null;
@@ -836,25 +1065,32 @@ function renderGroupTabs(){
   }
   wrap.classList.remove('hidden');
   state.groupOrder.forEach(name=>{
+    const g = state.groups[name];
+    const isSynced = g.syncMode === 'sheets';
     const tab = document.createElement('button');
     tab.type = 'button';
     tab.className = 'group-tab' + (name === state.activeGroupId ? ' active' : '');
 
     const label = document.createElement('span');
-    label.textContent = `${name} (${state.groups[name].roster.length})`;
+    label.textContent = `${isSynced ? '🔗 ' : ''}${name} (${g.roster.length})`;
     tab.appendChild(label);
 
     const x = document.createElement('span');
     x.className = 'group-tab-x';
     x.textContent = '×';
-    x.title = `Delete "${name}"`;
+    x.title = `Remove "${name}"`;
     x.onclick = (e)=>{
       e.stopPropagation();
-      const count = state.groups[name].roster.length;
-      if(confirm(`Delete the group "${name}"? This permanently removes its ${count} student(s) and all logged attendance. This cannot be undone.`)){
+      const count = g.roster.length;
+      const msg = isSynced
+        ? `Remove "${name}" from this device? It stays in your Google Sheet untouched — this only stops tracking it here.`
+        : `Delete the group "${name}"? This permanently removes its ${count} student(s) and all logged attendance. This cannot be undone.`;
+      if(confirm(msg)){
+        if(state.lockedGroup === name) state.lockedGroup = null;
         deleteGroup(name);
+        renderLockedGroupSelect();
         renderTable();
-        showToast(`Deleted "${name}"`);
+        showToast(`Removed "${name}"`);
       }
     };
     tab.appendChild(x);
@@ -934,6 +1170,22 @@ function deleteColumn(label){
   g.roster.forEach(s=>{ delete s.attendance[label]; });
   saveState();
   renderTable();
+}
+
+// Deletes a date column, syncing the deletion to the Google Sheet first when
+// the active group is Sheets-synced (so other devices see it disappear too).
+async function deleteColumnSynced(label){
+  const g = currentGroup();
+  if(!g) return;
+  if(g.syncMode === 'sheets'){
+    try{
+      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label });
+    }catch(err){
+      alert('Could not delete that column on the Google Sheet: ' + err.message);
+      return;
+    }
+  }
+  deleteColumn(label);
 }
 
 /* ============================== Import roster ============================== */
@@ -1078,10 +1330,59 @@ function handleDecodedText(rawText){
   processScannedCode(rawText);
 }
 
-function processScannedCode(rawText){
+async function processScannedCode(rawText){
   const id = extractId(rawText);
   const key = normalizeId(id);
   const sessionKey = getSessionLabel();
+
+  // If this device is locked to one Sheets-synced group, scanning is
+  // restricted to that group only — this is what keeps several people
+  // scanning at once from colliding with each other on the shared sheet.
+  if(state.lockedGroup){
+    const g = state.groups[state.lockedGroup];
+    if(!g){
+      alert('The group selected for this device is no longer available. Pick it again in Settings.');
+      return;
+    }
+    if(state.activeGroupId !== state.lockedGroup) state.activeGroupId = state.lockedGroup;
+    const student = g.roster.find(s=>s.key===key);
+    if(!student){
+      beep(320,160); vibrate(120);
+      setResultBanner('unknown', '⚠️', 'ID not in this group', id);
+      openAddModal({ id, name:'', markPresent:true, fromScan:true, forcedGroup: state.lockedGroup });
+      return;
+    }
+
+    const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
+    const time = formatTime(new Date());
+
+    ensureColumn(sessionKey); // acts on currentGroup(), already set to the locked group above
+    if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
+
+    // Check locally first — if this device already has a value here, there's
+    // no need to even hit the network to know it's a duplicate.
+    if(student.attendance[sessionKey][scanMode]){
+      beep(520,120); vibrate([30,40,30]);
+      setResultBanner('duplicate', '🔁', `${modeLabel(scanMode)} already logged`, `${student.name || student.id} — ${student.attendance[sessionKey][scanMode]}`);
+      resetResultBannerSoon();
+      return;
+    }
+
+    // Write locally and give instant feedback — scanning shouldn't have to
+    // wait for a round trip to Google's servers before you can move to the
+    // next person. The actual sheet write happens in the background.
+    student.attendance[sessionKey][scanMode] = time;
+    saveState();
+    if(!updateAttendanceCell(student.key, sessionKey, scanMode, time)) renderTable();
+    beep(880,140); vibrate(40);
+    setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${state.lockedGroup} · ${student.id} — ${time}`);
+    resetResultBannerSoon();
+
+    syncLogAttendanceInBackground(state.lockedGroup, student, sessionKey, eventName, scanMode, time);
+    return;
+  }
+
+  // Local (non-Sheets) behavior, unchanged: search every group and auto-detect.
   const found = findStudentAcrossGroups(key);
 
   if(!found){
@@ -1101,14 +1402,13 @@ function processScannedCode(rawText){
   if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
   const rec = student.attendance[sessionKey];
   if(rec[scanMode]){
+    // Nothing changed -- no need to touch storage or the DOM at all.
     beep(520,120); vibrate([30,40,30]);
     setResultBanner('duplicate', '🔁', `${modeLabel(scanMode)} already logged`, `${student.name || student.id} (${found.groupName}) — ${rec[scanMode]}`);
-    saveState();
-    renderTable();
   } else {
     rec[scanMode] = formatTime(new Date());
     saveState();
-    renderTable();
+    if(!updateAttendanceCell(student.key, sessionKey, scanMode, rec[scanMode])) renderTable();
     beep(880,140); vibrate(40);
     setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${found.groupName} · ${student.id} — ${rec[scanMode]}`);
   }
@@ -1210,6 +1510,26 @@ async function populateCameraList(){
 }
 
 /* ============================== Table render ============================== */
+// Updates one Time In/Out cell in place instead of rebuilding the whole
+// table — this is what keeps scanning fast on a large roster. Returns false
+// (and does nothing) if the cell isn't currently in the DOM — e.g. a brand
+// new date column, or the row is hidden behind a search filter — in which
+// case the caller should fall back to a full renderTable().
+function updateAttendanceCell(studentKey, sessionKey, mode, value){
+  const row = document.querySelector(`#tableBody tr[data-key="${CSS.escape(studentKey)}"]`);
+  if(!row) return false;
+  const cell = row.querySelector(`td.col-${mode==='out'?'out':'in'}[data-col="${CSS.escape(sessionKey)}"]`);
+  if(!cell) return false;
+  cell.textContent = value || '—';
+  cell.classList.toggle('present', !!value);
+  cell.classList.toggle('empty-cell', !value);
+  if(mode==='out') cell.classList.toggle('out-cell', !!value);
+  cell.classList.toggle('editable-cell', !!value);
+  if(value) cell.title = `Tap to clear this ${mode==='out'?'Time Out':'Time In'} (e.g. if scanned by mistake)`;
+  else cell.removeAttribute('title');
+  return true;
+}
+
 function renderTable(){
   const group = currentGroup();
   const roster = group ? group.roster : [];
@@ -1234,7 +1554,7 @@ function renderTable(){
     const txt = document.createElement('span'); txt.textContent = col;
     const x = document.createElement('span'); x.className='date-th-x'; x.textContent='×';
     x.title = 'Remove this column';
-    x.onclick = ()=>{ if(confirm(`Remove the "${col}" column from the log? This deletes those time records.`)) deleteColumn(col); };
+    x.onclick = ()=>{ if(confirm(`Remove the "${col}" column from the log? This deletes those time records.`)) deleteColumnSynced(col); };
     wrap.appendChild(txt); wrap.appendChild(x);
     th.appendChild(wrap);
     headRow.appendChild(th);
@@ -1267,12 +1587,13 @@ function renderTable(){
   } else {
     filtered.forEach(s=>{
       const tr = document.createElement('tr');
+      tr.dataset.key = s.key;
       const tdName = document.createElement('td'); tdName.className='col-name'; tdName.textContent = s.name || '(no name)'; tdName.title = s.name || '(no name)';
       const tdId = document.createElement('td'); tdId.className='col-id'; tdId.textContent = s.id; tdId.title = s.id;
       tr.appendChild(tdName); tr.appendChild(tdId);
       dateColumns.forEach(col=>{
         const rec = s.attendance[col] || {};
-        const tdIn = document.createElement('td'); tdIn.className = 'col-in ' + (rec.in ? 'present' : 'empty-cell');
+        const tdIn = document.createElement('td'); tdIn.className = 'col-in ' + (rec.in ? 'present' : 'empty-cell'); tdIn.dataset.col = col;
         tdIn.textContent = rec.in || '—';
         if(rec.in){
           tdIn.classList.add('editable-cell');
@@ -1286,7 +1607,7 @@ function renderTable(){
             }
           };
         }
-        const tdOut = document.createElement('td'); tdOut.className = 'col-out ' + (rec.out ? 'present out-cell' : 'empty-cell');
+        const tdOut = document.createElement('td'); tdOut.className = 'col-out ' + (rec.out ? 'present out-cell' : 'empty-cell'); tdOut.dataset.col = col;
         tdOut.textContent = rec.out || '—';
         if(rec.out){
           tdOut.classList.add('editable-cell');
@@ -1340,9 +1661,18 @@ function positionSubHeader(){
 }
 
 /* ============================== Modal (add student / unknown id) ============================== */
-function populateModalGroupField(){
-  $('modalGroupInput').value = state.activeGroupId || '';
+function populateModalGroupField(forcedGroup){
+  const input = $('modalGroupInput');
   const wrap = $('modalGroupChips');
+  if(forcedGroup){
+    input.value = forcedGroup;
+    input.disabled = true;
+    wrap.innerHTML = '';
+    wrap.classList.add('hidden');
+    return;
+  }
+  input.disabled = false;
+  input.value = state.activeGroupId || '';
   wrap.innerHTML = '';
   if(state.groupOrder.length === 0){
     wrap.classList.add('hidden');
@@ -1358,7 +1688,7 @@ function populateModalGroupField(){
     wrap.appendChild(chip);
   });
 }
-function openAddModal({ id='', name='', markPresent=false, fromScan=false }){
+function openAddModal({ id='', name='', markPresent=false, fromScan=false, forcedGroup=null }){
   modalOpen = true;
   $('modalTitle').textContent = fromScan ? 'Unrecognized QR code' : 'Add student';
   $('modalSub').textContent = fromScan
@@ -1366,7 +1696,7 @@ function openAddModal({ id='', name='', markPresent=false, fromScan=false }){
     : 'Add a new entry to the roster.';
   $('modalIdInput').value = id;
   $('modalNameInput').value = name;
-  populateModalGroupField();
+  populateModalGroupField(forcedGroup);
   $('modalMarkPresent').checked = markPresent;
   updateModalMarkPresentLabel();
   $('modalBackdrop').classList.add('open');
@@ -1374,18 +1704,47 @@ function openAddModal({ id='', name='', markPresent=false, fromScan=false }){
 }
 function closeAddModal(){
   modalOpen = false;
+  $('modalGroupInput').disabled = false;
   $('modalBackdrop').classList.remove('open');
 }
-function confirmAddModal(){
+async function confirmAddModal(){
   const id = $('modalIdInput').value.trim();
   const name = $('modalNameInput').value.trim();
   if(!id){ alert('Student ID is required.'); return; }
   const targetGroup = sanitizeGroupName($('modalGroupInput').value);
   if(!targetGroup){ alert('Enter a group name.'); return; }
-  createGroup(targetGroup); // creates it if new, otherwise just makes it the active group
+
+  const existingGroup = state.groups[targetGroup];
+  const isSheetsTarget = existingGroup && existingGroup.syncMode === 'sheets';
   const sessionKey = $('modalMarkPresent').checked ? getSessionLabel() : null;
   const mode = scanMode;
-  const s = addOrUpdateStudent(id, name, sessionKey, mode);
+  const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
+  const time = formatTime(new Date());
+
+  if(isSheetsTarget){
+    const confirmBtn = $('modalConfirmBtn');
+    confirmBtn.disabled = true; confirmBtn.textContent = 'Syncing…';
+    try{
+      await sheetsPost({ action:'addStudent', group: targetGroup, studentId: id, studentName: name });
+      if(sessionKey){
+        await sheetsPost({ action:'logAttendance', group: targetGroup, studentId: id, studentName: name, sessionLabel: sessionKey, eventName, mode, time });
+      }
+    }catch(err){
+      confirmBtn.disabled = false; confirmBtn.textContent = 'Add';
+      alert('Could not sync to the Google Sheet: ' + err.message);
+      return;
+    }
+    confirmBtn.disabled = false; confirmBtn.textContent = 'Add';
+  }
+
+  createGroup(targetGroup); // creates it if new (local groups only), otherwise just makes it the active group
+  const s = addOrUpdateStudent(id, name, null, mode);
+  if(sessionKey){
+    ensureColumn(sessionKey);
+    if(!s.attendance[sessionKey]) s.attendance[sessionKey] = { in:'', out:'' };
+    s.attendance[sessionKey][mode] = time;
+    saveState();
+  }
   renderTable();
   closeAddModal();
   if(sessionKey){
@@ -1553,6 +1912,23 @@ function init(){
     });
   });
 
+  $('sheetsUrlInput').value = state.sheetsUrl || '';
+  if(state.sheetsUrl){
+    $('sheetsStatusText').textContent = `Connected to: ${state.sheetsUrl.slice(0,40)}${state.sheetsUrl.length>40?'…':''}`;
+  }
+  $('sheetsConnectBtn').addEventListener('click', connectSheets);
+  $('sheetsRefreshBtn').addEventListener('click', refreshSheets);
+  $('lockedGroupSelect').addEventListener('change', (e)=>{
+    state.lockedGroup = e.target.value || null;
+    saveState();
+    updateLockedGroupIndicator();
+    if(state.lockedGroup) switchActiveGroup(state.lockedGroup);
+  });
+  $('autoSyncCheckbox').checked = !!settings.autoSync;
+  $('autoSyncCheckbox').addEventListener('change', (e)=> setAutoSync(e.target.checked));
+  renderLockedGroupSelect();
+  setAutoSync(!!settings.autoSync);
+
   $('fileNameInput').value = state.fileName || '';
   $('sessionLabelInput').value = todayLabel();
 
@@ -1656,7 +2032,7 @@ function init(){
   });
 
   $('addStudentBtn').addEventListener('click', ()=>{
-    openAddModal({ markPresent:false, fromScan:false });
+    openAddModal({ markPresent:false, fromScan:false, forcedGroup: state.lockedGroup || null });
   });
   $('exportXlsxBtn').addEventListener('click', exportXLSX);
 
