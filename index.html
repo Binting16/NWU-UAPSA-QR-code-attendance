@@ -663,7 +663,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'nolock-checkbox-2026-08-16';
+const BUILD_TAG = 'visible-sync-status-2026-08-16';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -1017,6 +1017,7 @@ async function syncLogAttendanceInBackground(groupName, student, sessionKey, eve
   }catch(err){
     console.error('Background sync failed, queued for retry:', err);
     queuePendingSync(payload);
+    showToast(`⚠️ Could not sync ${student.name || student.id} to the Sheet — will retry`);
   }
 }
 
@@ -1036,6 +1037,7 @@ function clearAttendanceCellSynced(group, student, sessionKey, mode){
     sheetsPost(payload).catch(err=>{
       console.error('Clear failed to sync, queued for retry:', err);
       queuePendingSync(payload);
+      showToast('⚠️ Could not clear on the Sheet — will retry');
     });
   }
 }
@@ -1488,7 +1490,8 @@ function logScanResult(group, groupName, student, sessionKey){
   saveState();
   if(!updateAttendanceCell(student.key, sessionKey, scanMode, time)) renderTable();
   beep(880,140); vibrate(40);
-  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${groupName} · ${student.id} — ${time}`);
+  const syncTag = group.syncMode === 'sheets' ? ' 🔗' : '';
+  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${groupName}${syncTag} · ${student.id} — ${time}`);
   resetResultBannerSoon();
 
   if(group.syncMode === 'sheets'){
