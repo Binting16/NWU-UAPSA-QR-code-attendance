@@ -303,6 +303,23 @@ tbody tr:last-child td{border-bottom:none;}
 td.present{background:var(--success-bg);color:var(--success-ink);font-weight:600;}
 td.present.out-cell{background:var(--danger-bg);color:var(--danger);}
 td.empty-cell{color:#C2CCDA;}
+.cross-group-results{
+  border:1px solid var(--border);border-radius:10px;background:#FBFCFE;
+  padding:8px 10px;margin-bottom:10px;max-height:160px;overflow-y:auto;
+}
+.cross-group-results.hidden{display:none;}
+.cross-group-label{margin:0 0 6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+.cross-group-row{
+  display:flex;align-items:center;gap:10px;width:100%;
+  border:none;background:none;text-align:left;padding:6px 4px;border-radius:8px;cursor:pointer;
+}
+.cross-group-row:hover,.cross-group-row:active{background:var(--primary-tint);}
+.cross-group-row .cgr-name{flex:1;font-size:13px;color:var(--ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cross-group-row .cgr-id{font-size:11.5px;color:var(--muted);font-family:var(--font-mono);flex-shrink:0;}
+.cross-group-row .cgr-group{
+  flex-shrink:0;font-size:11px;font-weight:700;color:var(--primary);
+  background:var(--primary-tint);padding:2px 8px;border-radius:999px;
+}
 th.col-absent,td.col-absent{text-align:center;min-width:64px;white-space:nowrap;}
 td.col-absent{font-weight:700;color:var(--muted);}
 td.col-absent.has-absences{background:var(--danger-bg);color:var(--danger);}
@@ -518,6 +535,7 @@ td.col-in,td.col-out{min-width:64px;}
             <input type="text" class="search-input" id="searchInput" placeholder="Search name or ID&hellip;">
             <span class="count-chip" id="countChip">0 / 0 present</span>
           </div>
+          <div class="cross-group-results hidden" id="crossGroupResults"></div>
           <div class="table-wrap">
             <table id="rosterTable">
               <thead>
@@ -1021,7 +1039,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'inline-sheets-guide-2026-08-16';
+const BUILD_TAG = 'absent-counter-global-search-2026-08-17';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -1983,6 +2001,53 @@ function updateAttendanceCell(studentKey, sessionKey, mode, value){
   return true;
 }
 
+// Global search: finds the same query across every OTHER group too (not
+// just the one currently open), so a name doesn't get missed just because
+// the wrong tab is showing. Clicking a result switches straight to that group.
+function renderCrossGroupResults(search, currentGroupName){
+  const wrap = $('crossGroupResults');
+  wrap.innerHTML = '';
+  if(!search){ wrap.classList.add('hidden'); return; }
+
+  const matches = [];
+  state.groupOrder.forEach(name=>{
+    if(name === currentGroupName) return;
+    const g = state.groups[name];
+    if(!g) return;
+    g.roster.forEach(s=>{
+      if((s.name||'').toLowerCase().includes(search) || (s.id||'').toLowerCase().includes(search)){
+        matches.push({ groupName:name, student:s });
+      }
+    });
+  });
+
+  if(matches.length === 0){ wrap.classList.add('hidden'); return; }
+
+  matches.sort((a,b)=> a.student.name.localeCompare(b.student.name));
+  const shown = matches.slice(0, 20);
+
+  wrap.classList.remove('hidden');
+  const label = document.createElement('p');
+  label.className = 'cross-group-label';
+  label.textContent = `Also found in other groups (${matches.length}):`;
+  wrap.appendChild(label);
+
+  shown.forEach(({groupName, student})=>{
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'cross-group-row';
+    row.title = `Switch to "${groupName}" to view this student`;
+
+    const nameSpan = document.createElement('span'); nameSpan.className='cgr-name'; nameSpan.textContent = student.name || '(no name)';
+    const idSpan = document.createElement('span'); idSpan.className='cgr-id'; idSpan.textContent = student.id;
+    const groupSpan = document.createElement('span'); groupSpan.className='cgr-group'; groupSpan.textContent = groupName;
+
+    row.appendChild(nameSpan); row.appendChild(idSpan); row.appendChild(groupSpan);
+    row.onclick = ()=>{ switchActiveGroup(groupName); };
+    wrap.appendChild(row);
+  });
+}
+
 function renderTable(){
   const group = currentGroup();
   const roster = group ? group.roster : [];
@@ -2041,6 +2106,8 @@ function renderTable(){
   });
 
   filtered.sort((a,b)=> a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+
+  renderCrossGroupResults(search, state.activeGroupId);
 
   if(filtered.length === 0){
     const tr = document.createElement('tr');
