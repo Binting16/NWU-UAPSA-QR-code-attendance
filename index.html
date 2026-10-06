@@ -1039,7 +1039,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'absent-counter-global-search-2026-08-17';
+const BUILD_TAG = 'absent-excel-export-2026-08-17';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -2303,6 +2303,7 @@ function buildSheetForGroup(group){
   const headerStyle = { font:{ bold:true, color:{ rgb:'FFFFFF' } }, fill:{ patternType:'solid', fgColor:{ rgb:'0B6E4F' } }, alignment:{ horizontal:'center', vertical:'center' } };
   const presentStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'C6EFCE' } }, font:{ color:{ rgb:'006100' } }, alignment:{ horizontal:'center' } };
   const idStyle = { font:{ name:'Consolas' } };
+  const absentStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'FBE7E5' } }, font:{ bold:true, color:{ rgb:'C5413B' } }, alignment:{ horizontal:'center' } };
   const outStyle = { fill:{ patternType:'solid', fgColor:{ rgb:'FBE7E5' } }, font:{ color:{ rgb:'C5413B' } }, alignment:{ horizontal:'center' } };
 
   // Only include a Time In / Time Out column for a date once that specific
@@ -2327,6 +2328,7 @@ function buildSheetForGroup(group){
     if(colModes[c].in) headerRow.push({ v:`${c} - Time In`, t:'s', s:headerStyle });
     if(colModes[c].out) headerRow.push({ v:`${c} - Time Out`, t:'s', s:headerStyle });
   });
+  headerRow.push({ v:'Absent', t:'s', s:headerStyle });
 
   const dataRows = group.roster
     .slice()
@@ -2336,11 +2338,13 @@ function buildSheetForGroup(group){
         { v:s.name||'', t:'s' },
         { v:s.id||'', t:'s', s:idStyle }
       ];
+      let absentCount = 0;
       visibleDateColumns.forEach(c=>{
         const rec = s.attendance[c] || {};
-        if(colModes[c].in) row.push(rec.in ? { v:rec.in, t:'s', s:presentStyle } : { v:'', t:'s' });
-        if(colModes[c].out) row.push(rec.out ? { v:rec.out, t:'s', s:outStyle } : { v:'', t:'s' });
+        if(colModes[c].in){ row.push(rec.in ? { v:rec.in, t:'s', s:presentStyle } : { v:'', t:'s' }); if(!rec.in) absentCount++; }
+        if(colModes[c].out){ row.push(rec.out ? { v:rec.out, t:'s', s:outStyle } : { v:'', t:'s' }); if(!rec.out) absentCount++; }
       });
+      row.push(absentCount > 0 ? { v:absentCount, t:'n', s:absentStyle } : { v:0, t:'n' });
       return row;
     });
 
@@ -2366,6 +2370,7 @@ function buildSheetForGroup(group){
     colIndex += span;
   });
 
+  titleRow.push({ v:'', t:'s', s:blankTitleStyle }); // blank above the Absent column, same as Name/Student ID
   const aoa = [titleRow, headerRow, ...dataRows];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!merges'] = merges;
@@ -2374,7 +2379,7 @@ function buildSheetForGroup(group){
     dateColWidths.push({ wch:11 });
     if(colModes[c].in && colModes[c].out) dateColWidths.push({ wch:11 });
   });
-  ws['!cols'] = [{ wch:30 }, { wch:14 }, ...dateColWidths];
+  ws['!cols'] = [{ wch:30 }, { wch:14 }, ...dateColWidths, { wch:10 }];
   return ws;
 }
 
