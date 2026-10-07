@@ -598,6 +598,7 @@ td.col-in,td.col-out{min-width:64px;}
       <div class="code-block-wrap">
         <button type="button" class="btn btn-ghost copy-code-btn" id="copyAppsScriptBtn">Copy code</button>
         <pre class="code-block"><code id="appsScriptCode">/**
+/**
  * QR Code Attendance — Google Sheets relay
  * ==========================================
  * Deploy this INSIDE the Google Sheet you want to use as your shared
@@ -605,46 +606,52 @@ td.col-in,td.col-out{min-width:64px;}
  *   1. Open the target Google Sheet.
  *   2. Extensions → Apps Script.
  *   3. Delete anything in the editor, paste this whole file in.
- *   4. Deploy → New deployment → gear icon → &quot;Web app&quot;.
+ *   4. Deploy → New deployment → gear icon → "Web app".
  *        Execute as: Me
  *        Who has access: Anyone
- *   5. Deploy → copy the Web app URL → paste it into the app&#x27;s
- *      Settings → &quot;Google Sheets sync&quot; field.
+ *   5. Deploy → copy the Web app URL → paste it into the app's
+ *      Settings → "Google Sheets sync" field.
  *
- * Sheet layout this expects (matches the app&#x27;s own Excel export exactly):
- *   Row 1: title cells (event name, merged per date-pair, blank over Name/ID)
- *   Row 2: headers — Name, Student ID, then &quot;&lt;date&gt; - Time In&quot; / &quot;&lt;date&gt; - Time Out&quot; pairs
+ * Sheet layout this expects (matches the app's own Excel export exactly):
+ *   Row 1: title cells (event name, one per date column)
+ *   Row 2: headers — Name, Student ID, then "<date> - Time In" and/or
+ *          "<date> - Time Out" columns
  *   Row 3+: one row per student
  *
- * Each worksheet TAB in the spreadsheet is treated as one &quot;group&quot; in the app.
- * Add a new tab in Sheets (with at least &quot;Name&quot;/&quot;Student ID&quot; in row 2, or
- * just leave it blank — the relay fills that in) and hit &quot;Refresh&quot; in the
+ * A date only gets the ONE column for whichever mode (Time In or Time Out)
+ * has actually been scanned — nothing is created ahead of time. If you
+ * later also use the other mode for that same date, its column gets added
+ * then, not before.
+ *
+ * Each worksheet TAB in the spreadsheet is treated as one "group" in the app.
+ * Add a new tab in Sheets (with at least "Name"/"Student ID" in row 2, or
+ * just leave it blank — the relay fills that in) and hit "Refresh" in the
  * app to pick it up. Deleting a group in the app does NOT delete the sheet
  * tab — it only stops tracking it on that device.
  */
 
 function doGet(e) {
   var action = e.parameter.action;
-  if (action === &#x27;snapshot&#x27;) {
+  if (action === 'snapshot') {
     return respond(buildSnapshot());
   }
-  return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
+  return respond({ ok: false, error: 'Unknown action: ' + action });
 }
 
 function doPost(e) {
   var lock = LockService.getScriptLock();
   var gotLock = lock.tryLock(15000);
   if (!gotLock) {
-    return respond({ ok: false, error: &#x27;Sheet is busy, try again in a moment.&#x27; });
+    return respond({ ok: false, error: 'Sheet is busy, try again in a moment.' });
   }
   try {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
-    if (action === &#x27;logAttendance&#x27;) return respond(logAttendance(payload));
-    if (action === &#x27;deleteColumn&#x27;) return respond(deleteColumnAction(payload));
-    if (action === &#x27;addStudent&#x27;) return respond(addStudentAction(payload));
-    if (action === &#x27;clearCell&#x27;) return respond(clearCellAction(payload));
-    return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
+    if (action === 'logAttendance') return respond(logAttendance(payload));
+    if (action === 'deleteColumn') return respond(deleteColumnAction(payload));
+    if (action === 'addStudent') return respond(addStudentAction(payload));
+    if (action === 'clearCell') return respond(clearCellAction(payload));
+    return respond({ ok: false, error: 'Unknown action: ' + action });
   } catch (err) {
     return respond({ ok: false, error: String(err) });
   } finally {
@@ -661,26 +668,26 @@ function getSS() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
-/* ---------- Colors (matches the app&#x27;s local Excel export exactly) ---------- */
-var COLOR_PRIMARY      = &#x27;#0B6E4F&#x27;; // header row background, title text
-var COLOR_PRIMARY_TINT = &#x27;#DFF3EA&#x27;; // title row background
-var COLOR_WHITE         = &#x27;#FFFFFF&#x27;;
-var COLOR_PRESENT_BG    = &#x27;#C6EFCE&#x27;; // Time In cell background
-var COLOR_PRESENT_FG    = &#x27;#006100&#x27;; // Time In text
-var COLOR_OUT_BG        = &#x27;#FBE7E5&#x27;; // Time Out cell background
-var COLOR_OUT_FG        = &#x27;#C5413B&#x27;; // Time Out text
+/* ---------- Colors (matches the app's local Excel export exactly) ---------- */
+var COLOR_PRIMARY      = '#0B6E4F'; // header row background, title text
+var COLOR_PRIMARY_TINT = '#DFF3EA'; // title row background
+var COLOR_WHITE         = '#FFFFFF';
+var COLOR_PRESENT_BG    = '#C6EFCE'; // Time In cell background
+var COLOR_PRESENT_FG    = '#006100'; // Time In text
+var COLOR_OUT_BG        = '#FBE7E5'; // Time Out cell background
+var COLOR_OUT_FG        = '#C5413B'; // Time Out text
 
 /* ---------- Sheet layout helpers ---------- */
 
 function ensureHeaderRows(sheet) {
-  if (sheet.getLastRow() &lt; 2) {
-    sheet.getRange(1, 1, 1, 2).setValues([[&#x27;&#x27;, &#x27;&#x27;]]).setBackground(COLOR_WHITE);
-    sheet.getRange(2, 1, 1, 2).setValues([[&#x27;Name&#x27;, &#x27;Student ID&#x27;]])
+  if (sheet.getLastRow() < 2) {
+    sheet.getRange(1, 1, 1, 2).setValues([['', '']]).setBackground(COLOR_WHITE);
+    sheet.getRange(2, 1, 1, 2).setValues([['Name', 'Student ID']])
       .setBackground(COLOR_PRIMARY)
       .setFontColor(COLOR_WHITE)
-      .setFontWeight(&#x27;bold&#x27;)
-      .setHorizontalAlignment(&#x27;center&#x27;)
-      .setVerticalAlignment(&#x27;middle&#x27;);
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
     sheet.setColumnWidth(1, 210); // Name
     sheet.setColumnWidth(2, 100); // Student ID
     sheet.setFrozenRows(2);
@@ -694,51 +701,51 @@ function getHeaderRow(sheet) {
 }
 
 function findDateColIndex(headerRow, sessionLabel, suffix) {
-  var target = sessionLabel + &#x27; - &#x27; + suffix;
-  for (var i = 0; i &lt; headerRow.length; i++) {
+  var target = sessionLabel + ' - ' + suffix;
+  for (var i = 0; i < headerRow.length; i++) {
     if (headerRow[i] === target) return i + 1; // 1-indexed column
   }
   return -1;
 }
 
-// Returns the 1-indexed column of &quot;&lt;sessionLabel&gt; - Time In&quot; (Time Out is
-// always the column right after it), creating both columns + the title
-// banner cell above them if this date hasn&#x27;t been logged yet.
-function ensureDateColumns(sheet, sessionLabel, eventName) {
+// Returns the 1-indexed column for "<sessionLabel> - Time In" or
+// "<sessionLabel> - Time Out" (whichever `mode` asks for), creating just
+// that ONE column — plus its own title cell above it — if it doesn't exist
+// yet. The other mode's column for this same date is only created later,
+// if and when it's actually used; nothing is set up ahead of time.
+function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
   ensureHeaderRows(sheet);
+  var suffix = (mode === 'out') ? 'Time Out' : 'Time In';
   var headerRow = getHeaderRow(sheet);
-  var inCol = findDateColIndex(headerRow, sessionLabel, &#x27;Time In&#x27;);
-  if (inCol !== -1) return inCol;
+  var existingCol = findDateColIndex(headerRow, sessionLabel, suffix);
+  if (existingCol !== -1) return existingCol;
 
   var newCol = sheet.getLastColumn() + 1;
-  if (newCol &lt; 3) newCol = 3;
+  if (newCol < 3) newCol = 3;
 
-  sheet.getRange(2, newCol, 1, 2).setValues([[sessionLabel + &#x27; - Time In&#x27;, sessionLabel + &#x27; - Time Out&#x27;]])
+  sheet.getRange(2, newCol).setValue(sessionLabel + ' - ' + suffix)
     .setBackground(COLOR_PRIMARY)
     .setFontColor(COLOR_WHITE)
-    .setFontWeight(&#x27;bold&#x27;)
-    .setHorizontalAlignment(&#x27;center&#x27;)
-    .setVerticalAlignment(&#x27;middle&#x27;);
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
   sheet.setColumnWidth(newCol, 90);
-  sheet.setColumnWidth(newCol + 1, 90);
 
-  var titleRange = sheet.getRange(1, newCol, 1, 2);
-  titleRange.setValues([[eventName || &#x27;Attendance&#x27;, &#x27;&#x27;]])
+  sheet.getRange(1, newCol).setValue(eventName || 'Attendance')
     .setBackground(COLOR_PRIMARY_TINT)
     .setFontColor(COLOR_PRIMARY)
-    .setFontWeight(&#x27;bold&#x27;)
-    .setHorizontalAlignment(&#x27;center&#x27;)
-    .setVerticalAlignment(&#x27;middle&#x27;);
-  try { titleRange.merge(); } catch (mergeErr) { /* fine if it can&#x27;t merge */ }
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
 
   return newCol;
 }
 
 function findStudentRow(sheet, studentId) {
   var lastRow = sheet.getLastRow();
-  if (lastRow &lt; 3) return -1;
+  if (lastRow < 3) return -1;
   var ids = sheet.getRange(3, 2, lastRow - 2, 1).getValues();
-  for (var i = 0; i &lt; ids.length; i++) {
+  for (var i = 0; i < ids.length; i++) {
     if (String(ids[i][0]).trim() === String(studentId).trim()) return i + 3;
   }
   return -1;
@@ -748,16 +755,15 @@ function findStudentRow(sheet, studentId) {
 
 function logAttendance(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { ok: false, error: 'No tab named "' + p.group + '" in this sheet.' };
 
-  var col = ensureDateColumns(sheet, p.sessionLabel, p.eventName);
-  var targetCol = (p.mode === &#x27;out&#x27;) ? col + 1 : col;
+  var targetCol = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
 
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) {
     row = Math.max(sheet.getLastRow() + 1, 3);
-    sheet.getRange(row, 1).setValue(p.studentName || &#x27;&#x27;);
-    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+    sheet.getRange(row, 1).setValue(p.studentName || '');
+    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily('Consolas');
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
@@ -767,8 +773,8 @@ function logAttendance(p) {
   if (existing) {
     return { ok: true, duplicate: true, existing: existing };
   }
-  cell.setValue(p.time).setHorizontalAlignment(&#x27;center&#x27;);
-  if (p.mode === &#x27;out&#x27;) {
+  cell.setValue(p.time).setHorizontalAlignment('center');
+  if (p.mode === 'out') {
     cell.setBackground(COLOR_OUT_BG).setFontColor(COLOR_OUT_FG);
   } else {
     cell.setBackground(COLOR_PRESENT_BG).setFontColor(COLOR_PRESENT_FG);
@@ -778,45 +784,60 @@ function logAttendance(p) {
 
 function clearCellAction(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { ok: false, error: 'No tab named "' + p.group + '" in this sheet.' };
 
   var headerRow = getHeaderRow(sheet);
-  var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-  if (inCol === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  var targetCol = (p.mode === &#x27;out&#x27;) ? inCol + 1 : inCol;
+  var suffix = (p.mode === 'out') ? 'Time Out' : 'Time In';
+  var targetCol = findDateColIndex(headerRow, p.sessionLabel, suffix);
+  if (targetCol === -1) return { ok: false, error: 'That date column was not found.' };
 
   var row = findStudentRow(sheet, p.studentId);
-  if (row === -1) return { ok: false, error: &#x27;That student was not found in this group.&#x27; };
+  if (row === -1) return { ok: false, error: 'That student was not found in this group.' };
 
   sheet.getRange(row, targetCol).clear(); // clears value + background + font color together
   return { ok: true };
 }
 
+// Deletes whichever column(s) exist for this date — just Time In, just Time
+// Out, or both if both were ever used. Higher column index is deleted first
+// so removing one doesn't shift the other's position before it's handled.
 function deleteColumnAction(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { ok: false, error: 'No tab named "' + p.group + '" in this sheet.' };
+
   var headerRow = getHeaderRow(sheet);
-  var col = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-  if (col === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  sheet.deleteColumns(col, 2);
+  var inCol = findDateColIndex(headerRow, p.sessionLabel, 'Time In');
+  var outCol = findDateColIndex(headerRow, p.sessionLabel, 'Time Out');
+
+  if (inCol === -1 && outCol === -1) {
+    return { ok: false, error: 'That date column was not found.' };
+  }
+
+  var cols = [inCol, outCol].filter(function (c) { return c !== -1; })
+    .sort(function (a, b) { return b - a; });
+  cols.forEach(function (c) { sheet.deleteColumn(c); });
+
   return { ok: true };
 }
 
 function addStudentAction(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { ok: false, error: 'No tab named "' + p.group + '" in this sheet.' };
   ensureHeaderRows(sheet);
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) {
     row = Math.max(sheet.getLastRow() + 1, 3);
-    sheet.getRange(row, 1).setValue(p.studentName || &#x27;&#x27;);
-    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+    sheet.getRange(row, 1).setValue(p.studentName || '');
+    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily('Consolas');
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
   return { ok: true };
 }
 
+// Reads the sheet back into the app's data shape. Columns are now scanned
+// one at a time (not in fixed pairs), since a date may only have a Time In
+// column, only a Time Out column, or both — in any order.
 function buildSnapshot() {
   var sheets = getSS().getSheets();
   var groups = {};
@@ -826,7 +847,7 @@ function buildSnapshot() {
     var lastRow = sheet.getLastRow();
     var lastCol = sheet.getLastColumn();
 
-    if (lastRow &lt; 2 || lastCol &lt; 2) {
+    if (lastRow < 2 || lastCol < 2) {
       groups[name] = { dateColumns: [], eventNames: {}, roster: [] };
       return;
     }
@@ -835,33 +856,38 @@ function buildSnapshot() {
     var titleRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     var dateColumns = [];
     var eventNames = {};
+    var colByLabelMode = {}; // "label|in" / "label|out" -> 0-indexed column
 
-    // Columns are 0-indexed here; data columns start at index 2 (col C) and
-    // come in Time In/Time Out pairs.
-    for (var c = 2; c &lt; lastCol; c += 2) {
-      var inHeader = headerRow[c];
-      if (!inHeader) continue;
-      var label = String(inHeader).replace(/ - Time In$/, &#x27;&#x27;);
-      dateColumns.push(label);
-      eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
+    for (var c = 2; c < lastCol; c++) {
+      var header = String(headerRow[c] || '');
+      var label = null, mode = null;
+      if (/ - Time In$/.test(header)) { label = header.replace(/ - Time In$/, ''); mode = 'in'; }
+      else if (/ - Time Out$/.test(header)) { label = header.replace(/ - Time Out$/, ''); mode = 'out'; }
+      else continue;
+
+      if (dateColumns.indexOf(label) === -1) dateColumns.push(label);
+      if (!eventNames[label]) eventNames[label] = titleRow[c] || 'Attendance';
+      colByLabelMode[label + '|' + mode] = c;
     }
 
     var roster = [];
-    if (lastRow &gt;= 3) {
+    if (lastRow >= 3) {
       var data = sheet.getRange(3, 1, lastRow - 2, lastCol).getValues();
       data.forEach(function (row) {
         var studentName = row[0];
         var studentId = row[1];
         if (!studentId) return;
         var attendance = {};
-        dateColumns.forEach(function (label, idx) {
-          var inVal = row[2 + idx * 2];
-          var outVal = row[2 + idx * 2 + 1];
+        dateColumns.forEach(function (label) {
+          var inIdx = colByLabelMode[label + '|in'];
+          var outIdx = colByLabelMode[label + '|out'];
+          var inVal = (inIdx !== undefined) ? row[inIdx] : '';
+          var outVal = (outIdx !== undefined) ? row[outIdx] : '';
           if (inVal || outVal) {
-            attendance[label] = { in: inVal || &#x27;&#x27;, out: outVal || &#x27;&#x27; };
+            attendance[label] = { in: inVal || '', out: outVal || '' };
           }
         });
-        roster.push({ id: String(studentId), name: String(studentName || &#x27;&#x27;), attendance: attendance });
+        roster.push({ id: String(studentId), name: String(studentName || ''), attendance: attendance });
       });
     }
 
