@@ -661,13 +661,6 @@ function getSS() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
-function formatAttendanceTime(value) {
-  if (value instanceof Date) {
-    return Utilities.formatDate(value, getSS().getSpreadsheetTimeZone(), 'h:mm a');
-  }
-  return value || '';
-}
-
 /* ---------- Colors (matches the app&#x27;s local Excel export exactly) ---------- */
 var COLOR_PRIMARY      = &#x27;#0B6E4F&#x27;; // header row background, title text
 var COLOR_PRIMARY_TINT = &#x27;#DFF3EA&#x27;; // title row background
@@ -772,9 +765,9 @@ function logAttendance(p) {
   var cell = sheet.getRange(row, targetCol);
   var existing = cell.getValue();
   if (existing) {
-    return { ok: true, duplicate: true, existing: formatAttendanceTime(existing) };
+    return { ok: true, duplicate: true, existing: existing };
   }
-  cell.setValue(p.time).setNumberFormat(&#x27;h:mm AM/PM&#x27;).setHorizontalAlignment(&#x27;center&#x27;);
+  cell.setValue(p.time).setHorizontalAlignment(&#x27;center&#x27;);
   if (p.mode === &#x27;out&#x27;) {
     cell.setBackground(COLOR_OUT_BG).setFontColor(COLOR_OUT_FG);
   } else {
@@ -842,23 +835,15 @@ function buildSnapshot() {
     var titleRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     var dateColumns = [];
     var eventNames = {};
-    var dateColumnIndexes = {};
 
-    // Resolve each attendance column from its header; adjacent columns may
-    // both be Time In when they belong to different sessions.
-    for (var c = 2; c &lt; lastCol; c++) {
-      var header = headerRow[c];
-      if (!header) continue;
-      var match = String(header).match(/^(.*) - Time (In|Out)$/);
-      if (!match) continue;
-      var label = match[1];
-      var mode = match[2].toLowerCase();
-      if (!dateColumnIndexes[label]) {
-        dateColumnIndexes[label] = {};
-        dateColumns.push(label);
-        eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
-      }
-      dateColumnIndexes[label][mode] = c;
+    // Columns are 0-indexed here; data columns start at index 2 (col C) and
+    // come in Time In/Time Out pairs.
+    for (var c = 2; c &lt; lastCol; c += 2) {
+      var inHeader = headerRow[c];
+      if (!inHeader) continue;
+      var label = String(inHeader).replace(/ - Time In$/, &#x27;&#x27;);
+      dateColumns.push(label);
+      eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
     }
 
     var roster = [];
@@ -870,11 +855,10 @@ function buildSnapshot() {
         if (!studentId) return;
         var attendance = {};
         dateColumns.forEach(function (label, idx) {
-          var columns = dateColumnIndexes[label];
-          var inVal = columns.in === undefined ? &#x27;&#x27; : row[columns.in];
-          var outVal = columns.out === undefined ? &#x27;&#x27; : row[columns.out];
+          var inVal = row[2 + idx * 2];
+          var outVal = row[2 + idx * 2 + 1];
           if (inVal || outVal) {
-            attendance[label] = { in: formatAttendanceTime(inVal), out: formatAttendanceTime(outVal) };
+            attendance[label] = { in: inVal || &#x27;&#x27;, out: outVal || &#x27;&#x27; };
           }
         });
         roster.push({ id: String(studentId), name: String(studentName || &#x27;&#x27;), attendance: attendance });
