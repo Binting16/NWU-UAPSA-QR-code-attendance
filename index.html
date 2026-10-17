@@ -622,6 +622,11 @@ td.col-in,td.col-out{min-width:64px;}
  * later also use the other mode for that same date, its column gets added
  * then, not before.
  *
+ * Every tab always has the SAME set of date columns: the first scan of a
+ * date/mode in ANY tab, by anyone, adds that column (with its event name) to
+ * ALL tabs. That keeps the number of events equal across groups, so absence
+ * counts are comparable. Deleting a date column removes it from every tab.
+ *
  * Each worksheet TAB in the spreadsheet is treated as one &quot;group&quot; in the app.
  * Add a new tab in Sheets (with at least &quot;Name&quot;/&quot;Student ID&quot; in row 2, or
  * just leave it blank — the relay fills that in) and hit &quot;Refresh&quot; in the
@@ -654,6 +659,8 @@ function doPost(e) {
     if (action === &#x27;deleteColumn&#x27;) return respond(deleteColumnAction(payload));
     if (action === &#x27;addStudent&#x27;) return respond(addStudentAction(payload));
     if (action === &#x27;clearCell&#x27;) return respond(clearCellAction(payload));
+    if (action === &#x27;ensureColumn&#x27;) return respond(ensureColumnAction(payload));
+    if (action === &#x27;syncColumns&#x27;) return respond(syncColumnsAction(payload));
     return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
   } catch (err) {
     return respond({ ok: false, error: String(err) });
@@ -742,13 +749,9 @@ function findDateColIndex(headerRow, sessionLabel, suffix) {
 // that ONE column — plus its own title cell above it — if it doesn&#x27;t exist
 // yet. The other mode&#x27;s column for this same date is only created later,
 // if and when it&#x27;s actually used; nothing is set up ahead of time.
-function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
+function createDateColumn(sheet, sessionLabel, mode, eventName) {
   ensureHeaderRows(sheet);
   var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
-  var headerRow = getHeaderRow(sheet);
-  var existingCol = findDateColIndex(headerRow, sessionLabel, suffix);
-  if (existingCol !== -1) return existingCol;
-
   var newCol = sheet.getLastColumn() + 1;
   if (newCol &lt; 3) newCol = 3;
 
@@ -770,6 +773,24 @@ function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
   return newCol;
 }
 
+// Returns { col, created } for the &quot;&lt;sessionLabel&gt; - Time In/Out&quot; column,
+// creating just that ONE column if this tab doesn&#x27;t have it yet. The other
+// mode&#x27;s column is only created later, if and when it&#x27;s actually used.
+function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
+  ensureHeaderRows(sheet);
+  var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
+  var existingCol = findDateColIndex(getHeaderRow(sheet), sessionLabel, suffix);
+  if (existingCol !== -1) return { col: existingCol, created: false };
+  return { col: createDateColumn(sheet, sessionLabel, mode, eventName), created: true };
+}
+
+// Gives EVERY tab this date/mode column (no-op for tabs that already have it).
+function ensureColumnInAllTabs(sessionLabel, mode, eventName) {
+  getSS().getSheets().forEach(function (sheet) {
+    ensureDateColumn(sheet, sessionLabel, mode, eventName);
+  });
+}
+
 function findStudentRow(sheet, studentId) {
   var lastRow = sheet.getLastRow();
   if (lastRow &lt; 3) return -1;
@@ -786,7 +807,17 @@ function logAttendance(p) {
   var sheet = getSS().getSheetByName(p.group);
   if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
 
-  var targetCol = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
+  var colInfo = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
+  var targetCol = colInfo.col;
+  if (colInfo.created) {
+    // First scan of this date/mode: every other tab gets the same column,
+    // so all groups end up with the same set of events.
+    getSS().getSheets().forEach(function (other) {
+      if (other.getName() !== sheet.getName()) {
+        ensureDateColumn(other, p.sessionLabel, p.mode, p.eventName);
+      }
+    });
+  }
 
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) {
@@ -833,22 +864,62 @@ function clearCellAction(p) {
 // Out, or both if both were ever used. Higher column index is deleted first
 // so removing one doesn&#x27;t shift the other&#x27;s position before it&#x27;s handled.
 function deleteColumnAction(p) {
-  var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
-
-  var headerRow = getHeaderRow(sheet);
-  var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-  var outCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
-
-  if (inCol === -1 &amp;&amp; outCol === -1) {
-    return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  }
-
-  var cols = [inCol, outCol].filter(function (c) { return c !== -1; })
-    .sort(function (a, b) { return b - a; });
-  cols.forEach(function (c) { sheet.deleteColumn(c); });
-
+  var deletedAny = false;
+  getSS().getSheets().forEach(function (sheet) {
+    if (sheet.getLastRow() &lt; 2) return;
+    var headerRow = getHeaderRow(sheet);
+    var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
+    var outCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
+    // Higher column index first so deleting one doesn&#x27;t shift the other.
+    [inCol, outCol].filter(function (c) { return c !== -1; })
+      .sort(function (a, b) { return b - a; })
+      .forEach(function (c) { sheet.deleteColumn(c); deletedAny = true; });
+  });
+  if (!deletedAny) return { ok: false, error: &#x27;That date column was not found.&#x27; };
   return { ok: true };
+}
+
+function ensureColumnAction(p) {
+  ensureColumnInAllTabs(p.sessionLabel, p.mode, p.eventName);
+  return { ok: true };
+}
+
+// Makes every tab have the same columns: the union of what the app sends plus
+// whatever any tab already has. Used when a tab is added later.
+function syncColumnsAction(p) {
+  var sheets = getSS().getSheets();
+  var union = [];
+  var seen = {};
+  function add(label, mode, eventName) {
+    var key = label + &#x27;|&#x27; + mode;
+    if (seen[key]) return;
+    seen[key] = true;
+    union.push({ label: label, mode: mode, eventName: eventName || &#x27;Attendance&#x27; });
+  }
+  (p.columns || []).forEach(function (c) { add(c.label, c.mode === &#x27;out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, c.eventName); });
+  sheets.forEach(function (sheet) {
+    var lastCol = sheet.getLastColumn();
+    if (sheet.getLastRow() &lt; 2 || lastCol &lt; 3) return;
+    var headers = sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
+    var titles = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+    for (var c = 2; c &lt; lastCol; c++) {
+      var m = /^(.*) - (Time In|Time Out)$/.exec(String(headers[c] || &#x27;&#x27;));
+      if (m) add(m[1], m[2] === &#x27;Time Out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, titles[c]);
+    }
+  });
+
+  var created = 0;
+  sheets.forEach(function (sheet) {
+    ensureHeaderRows(sheet);
+    var have = {};
+    var headers = sheet.getRange(2, 1, 1, Math.max(sheet.getLastColumn(), 2)).getDisplayValues()[0];
+    headers.forEach(function (h) { have[h] = true; });
+    union.forEach(function (u) {
+      var header = u.label + &#x27; - &#x27; + (u.mode === &#x27;out&#x27; ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;);
+      if (!have[header]) { createDateColumn(sheet, u.label, u.mode, u.eventName); created++; }
+    });
+  });
+  return { ok: true, columns: union.length, created: created };
 }
 
 function addStudentAction(p) {
@@ -880,7 +951,7 @@ function buildSnapshot() {
     var lastCol = sheet.getLastColumn();
 
     if (lastRow &lt; 2 || lastCol &lt; 2) {
-      groups[name] = { dateColumns: [], eventNames: {}, roster: [] };
+      groups[name] = { dateColumns: [], eventNames: {}, modes: {}, roster: [] };
       return;
     }
 
@@ -888,6 +959,7 @@ function buildSnapshot() {
     var titleRow = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
     var dateColumns = [];
     var eventNames = {};
+    var modes = {}; // label -&gt; { in: bool, out: bool } — which columns exist, even if empty
     var colByLabelMode = {}; // &quot;label|in&quot; / &quot;label|out&quot; -&gt; 0-indexed column
 
     for (var c = 2; c &lt; lastCol; c++) {
@@ -900,6 +972,8 @@ function buildSnapshot() {
       if (dateColumns.indexOf(label) === -1) dateColumns.push(label);
       if (!eventNames[label]) eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
       colByLabelMode[label + &#x27;|&#x27; + mode] = c;
+      if (!modes[label]) modes[label] = { in: false, out: false };
+      modes[label][mode] = true;
     }
 
     var roster = [];
@@ -923,7 +997,7 @@ function buildSnapshot() {
       });
     }
 
-    groups[name] = { dateColumns: dateColumns, eventNames: eventNames, roster: roster };
+    groups[name] = { dateColumns: dateColumns, eventNames: eventNames, modes: modes, roster: roster };
   });
 
   return { ok: true, groups: groups };
@@ -1097,7 +1171,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'sheets-time-fix-2026-08-17';
+const BUILD_TAG = 'shared-events-2026-08-18';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -1212,6 +1286,18 @@ function currentGroup(){
     });
   });
   if(changed) saveState();
+})();
+
+// Make every group share the same events (older data had different columns per group).
+(function migrateSharedEvents(){
+  Object.values(state.groups).forEach(g=>{
+    if(!g.columnModes) g.columnModes = {};
+    (g.dateColumns||[]).forEach(label=>{
+      if(!g.columnModes[label]) g.columnModes[label] = inferModes(g.roster, label);
+    });
+  });
+  reconcileSessions();
+  saveState();
 })();
 
 let scanMode = (state.scanMode === 'out') ? 'out' : 'in';
@@ -1329,13 +1415,17 @@ function applySheetsSnapshot(groups){
     state.groups[name] = {
       dateColumns: g.dateColumns || [],
       eventNames: g.eventNames || {},
+      columnModes: buildColumnModesFromSnapshot(g),
       roster: (g.roster||[]).map(s=>({ id: String(s.id), key: normalizeId(s.id), name: s.name || '', attendance: s.attendance || {} })),
       syncMode: 'sheets'
     };
     if(!state.groupOrder.includes(name)) state.groupOrder.push(name);
   });
   if(!state.activeGroupId && state.groupOrder.length) state.activeGroupId = state.groupOrder[0];
+  const needsSheetSync = sheetsTabsMissingColumns();
+  reconcileSessions();
   saveState();
+  if(needsSheetSync) syncColumnsToSheetsInBackground();
 }
 
 async function connectSheets(){
@@ -1528,12 +1618,132 @@ function setAutoSync(enabled){
   }
 }
 
+/* ============================== Events are shared by every group ==============================
+   A column is "date label + mode" (e.g. "Sep 16, 2026 (AM)" + Time In). The
+   first successful scan of a given date/mode — in ANY group, by ANYONE — adds
+   that column, with its event name, to EVERY group. That way all groups always
+   have the same set of events, so absence counts line up across groups. */
+function currentEventName(){ return ($('fileNameInput').value||'').trim() || 'Attendance'; }
+
+function ensureSessionFields(g){
+  if(!g.eventNames) g.eventNames = {};
+  if(!g.columnModes) g.columnModes = {};
+}
+
+function inferModes(roster, label){
+  return {
+    in: (roster||[]).some(s=>s.attendance && s.attendance[label] && s.attendance[label].in),
+    out: (roster||[]).some(s=>s.attendance && s.attendance[label] && s.attendance[label].out)
+  };
+}
+
+function getColumnModes(group, label){
+  ensureSessionFields(group);
+  return group.columnModes[label] || inferModes(group.roster, label);
+}
+
+// Union of every date/mode column that exists in any group.
+function computeSessionUnion(){
+  const order = [], modes = {}, names = {};
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    (g.dateColumns||[]).forEach(label=>{
+      if(!order.includes(label)) order.push(label);
+      const gm = getColumnModes(g, label);
+      const um = modes[label] || (modes[label] = { in:false, out:false });
+      if(gm.in) um.in = true;
+      if(gm.out) um.out = true;
+      if(!names[label] && g.eventNames[label]) names[label] = g.eventNames[label];
+    });
+  });
+  return { order, modes, names };
+}
+
+// Makes every group have the same columns (used after loading/syncing data
+// and whenever a new group appears).
+function reconcileSessions(){
+  const { order, modes, names } = computeSessionUnion();
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    order.forEach(label=>{
+      if(!g.dateColumns.includes(label)) g.dateColumns.push(label);
+      g.columnModes[label] = { in: modes[label].in, out: modes[label].out };
+      if(!g.eventNames[label]) g.eventNames[label] = names[label] || 'Attendance';
+    });
+  });
+}
+
+// Adds this date/mode column to ALL groups. Returns true if it was brand new.
+function registerSession(label, mode, eventName){
+  let created = false;
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    if(!g.dateColumns.includes(label)) g.dateColumns.push(label);
+    if(!g.eventNames[label]) g.eventNames[label] = eventName || 'Attendance';
+    const m = g.columnModes[label] || (g.columnModes[label] = { in:false, out:false });
+    if(!m[mode]){ m[mode] = true; created = true; }
+  });
+  return created;
+}
+
+function sheetsConfigured(){
+  return !!((state.sheetsUrl||'').trim()) && getSheetsGroups().length > 0;
+}
+
+// True if some Sheets tab is missing a column that exists in another group.
+function sheetsTabsMissingColumns(){
+  const { order, modes } = computeSessionUnion();
+  return getSheetsGroups().some(gn=>{
+    const g = state.groups[gn];
+    return order.some(label=>{
+      const gm = getColumnModes(g, label);
+      return (modes[label].in && !gm.in) || (modes[label].out && !gm.out);
+    });
+  });
+}
+
+// A scan in a LOCAL group created a new column: make the Sheet's tabs match.
+function syncNewColumnToSheets(label, mode, eventName){
+  if(!sheetsConfigured()) return;
+  const payload = { action:'ensureColumn', sessionLabel:label, mode, eventName };
+  sheetsPost(payload).catch(err=>{
+    console.error('Column sync failed, queued for retry:', err);
+    queuePendingSync(payload);
+  });
+}
+
+// Pushes the full set of columns so every Sheet tab has all of them.
+function syncColumnsToSheetsInBackground(){
+  if(!sheetsConfigured()) return;
+  const { order, modes, names } = computeSessionUnion();
+  const columns = [];
+  order.forEach(label=>{
+    if(modes[label].in) columns.push({ label, mode:'in', eventName: names[label] || 'Attendance' });
+    if(modes[label].out) columns.push({ label, mode:'out', eventName: names[label] || 'Attendance' });
+  });
+  sheetsPost({ action:'syncColumns', columns }).catch(err=>console.warn('Column sync failed:', err));
+}
+
+// Columns for one tab of a Sheets snapshot (older relay scripts don't send modes).
+function buildColumnModesFromSnapshot(g){
+  const out = {};
+  (g.dateColumns||[]).forEach(label=>{
+    const m = g.modes && g.modes[label];
+    out[label] = m ? { in: !!m.in, out: !!m.out } : inferModes(g.roster, label);
+  });
+  return out;
+}
+
 function createGroup(name){
   const clean = sanitizeGroupName(name);
   if(!clean) return null;
   if(!state.groups[clean]){
-    state.groups[clean] = { dateColumns: [], roster: [], eventNames: {} };
+    state.groups[clean] = { dateColumns: [], roster: [], eventNames: {}, columnModes: {} };
     state.groupOrder.push(clean);
+    reconcileSessions(); // a new group starts with every existing event, so absence counts stay comparable
   }
   state.activeGroupId = clean;
   saveState();
@@ -1615,20 +1825,7 @@ function findStudentAcrossGroups(key){
   return null;
 }
 
-function ensureColumn(label){
-  const g = currentGroup();
-  if(!g) return;
-  if(!g.eventNames) g.eventNames = {};
-  if(!g.dateColumns.includes(label)){
-    g.dateColumns.push(label);
-    // Snapshot whatever's in the Export file name field right now — this is
-    // what lets each date's columns carry the event name that was active
-    // when that session was actually recorded, even if the field gets
-    // changed later for a different day/event.
-    const nameField = $('fileNameInput');
-    g.eventNames[label] = (nameField && nameField.value.trim()) || 'Attendance';
-  }
-}
+
 
 function addOrUpdateStudent(id, name, markPresentForKey, mode){
   const g = currentGroup();
@@ -1644,7 +1841,7 @@ function addOrUpdateStudent(id, name, markPresentForKey, mode){
   }
   if(markPresentForKey){
     const m = (mode === 'out') ? 'out' : 'in';
-    ensureColumn(markPresentForKey);
+    registerSession(markPresentForKey, m, currentEventName());
     if(!s.attendance[markPresentForKey]) s.attendance[markPresentForKey] = { in:'', out:'' };
     if(!s.attendance[markPresentForKey][m]) s.attendance[markPresentForKey][m] = formatTime(new Date());
   }
@@ -1661,10 +1858,14 @@ function deleteStudent(key){
 }
 
 function deleteColumn(label){
-  const g = currentGroup();
-  if(!g) return;
-  g.dateColumns = g.dateColumns.filter(c=>c!==label);
-  g.roster.forEach(s=>{ delete s.attendance[label]; });
+  // Events are shared, so deleting one removes it from EVERY group.
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name]; if(!g) return;
+    g.dateColumns = g.dateColumns.filter(c=>c!==label);
+    if(g.columnModes) delete g.columnModes[label];
+    if(g.eventNames) delete g.eventNames[label];
+    g.roster.forEach(s=>{ delete s.attendance[label]; });
+  });
   saveState();
   renderTable();
 }
@@ -1672,17 +1873,16 @@ function deleteColumn(label){
 // Deletes a date column, syncing the deletion to the Google Sheet first when
 // the active group is Sheets-synced (so other devices see it disappear too).
 async function deleteColumnSynced(label){
-  const g = currentGroup();
-  if(!g) return;
-  if(g.syncMode === 'sheets'){
+  if(sheetsConfigured()){
     try{
       await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label });
     }catch(err){
-      alert('Could not delete that column on the Google Sheet: ' + err.message);
+      alert('Could not delete on the Google Sheet: ' + err.message);
       return;
     }
   }
   deleteColumn(label);
+  showToast('Deleted from all groups');
 }
 
 /* ============================== Import roster ============================== */
@@ -1907,7 +2107,6 @@ async function processScannedCode(rawText){
 // This is what makes Sheets sync work correctly even without a device lock.
 function logScanResult(group, groupName, student, sessionKey){
   const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
-  ensureColumn(sessionKey); // acts on currentGroup(), already pointed at groupName above
   if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
   const rec = student.attendance[sessionKey];
 
@@ -1919,6 +2118,8 @@ function logScanResult(group, groupName, student, sessionKey){
     return;
   }
 
+  // First successful scan of this date/mode — by anyone, in any group — adds the column to EVERY group.
+  const isNewColumn = registerSession(sessionKey, scanMode, eventName);
   const time = formatTime(new Date());
   rec[scanMode] = time;
   saveState();
@@ -1930,6 +2131,8 @@ function logScanResult(group, groupName, student, sessionKey){
 
   if(group.syncMode === 'sheets'){
     syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, scanMode, time);
+  } else if(isNewColumn){
+    syncNewColumnToSheets(sessionKey, scanMode, eventName); // keep the Sheet's tabs in step
   }
 }
 
@@ -2130,10 +2333,9 @@ function renderTable(){
   const colModes = {};
   const visibleDateColumns = [];
   dateColumns.forEach(col=>{
-    const hasIn = roster.some(s=>s.attendance[col] && s.attendance[col].in);
-    const hasOut = roster.some(s=>s.attendance[col] && s.attendance[col].out);
-    if(!hasIn && !hasOut) return; // nothing logged for this date at all -- don't show it
-    colModes[col] = { in: hasIn, out: hasOut };
+    const modes = getColumnModes(group, col);
+    if(!modes.in && !modes.out) return; // no scan has used this date yet
+    colModes[col] = { in: !!modes.in, out: !!modes.out };
     visibleDateColumns.push(col);
   });
 
@@ -2145,7 +2347,7 @@ function renderTable(){
     const txt = document.createElement('span'); txt.textContent = col;
     const x = document.createElement('span'); x.className='date-th-x'; x.textContent='×';
     x.title = 'Remove this column';
-    x.onclick = ()=>{ if(confirm(`Remove the "${col}" column from the log? This deletes those time records.`)) deleteColumnSynced(col); };
+    x.onclick = ()=>{ if(confirm(`Remove "${col}" from ALL groups? Events are shared, so this deletes those time records everywhere.`)) deleteColumnSynced(col); };
     wrap.appendChild(txt); wrap.appendChild(x);
     th.appendChild(wrap);
     headRow.appendChild(th);
@@ -2340,7 +2542,9 @@ async function confirmAddModal(){
   createGroup(targetGroup); // creates it if new (local groups only), otherwise just makes it the active group
   const s = addOrUpdateStudent(id, name, null, mode);
   if(sessionKey){
-    ensureColumn(sessionKey);
+    const evName = currentEventName();
+    const isNewColumn = registerSession(sessionKey, mode, evName);
+    if(isNewColumn && !(state.groups[targetGroup] && state.groups[targetGroup].syncMode === 'sheets')) syncNewColumnToSheets(sessionKey, mode, evName);
     if(!s.attendance[sessionKey]) s.attendance[sessionKey] = { in:'', out:'' };
     s.attendance[sessionKey][mode] = time;
     saveState();
@@ -2371,10 +2575,9 @@ function buildSheetForGroup(group){
   const colModes = {};
   const visibleDateColumns = [];
   group.dateColumns.forEach(c=>{
-    const hasIn = group.roster.some(s=>s.attendance[c] && s.attendance[c].in);
-    const hasOut = group.roster.some(s=>s.attendance[c] && s.attendance[c].out);
-    if(!hasIn && !hasOut) return;
-    colModes[c] = { in: hasIn, out: hasOut };
+    const modes = getColumnModes(group, c);
+    if(!modes.in && !modes.out) return;
+    colModes[c] = { in: !!modes.in, out: !!modes.out };
     visibleDateColumns.push(c);
   });
 
