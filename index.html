@@ -179,7 +179,7 @@ header.topbar{
 .field{margin-bottom:10px;}
 .field:last-child{margin-bottom:0;}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;}
-.field input[type=text],.field input[type=date]{
+.field input[type=text],.field input[type=date],.field input[type=time]{
   width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
   background:#FBFCFE;color:var(--ink);
 }
@@ -661,6 +661,8 @@ function doPost(e) {
     if (action === &#x27;clearCell&#x27;) return respond(clearCellAction(payload));
     if (action === &#x27;ensureColumn&#x27;) return respond(ensureColumnAction(payload));
     if (action === &#x27;syncColumns&#x27;) return respond(syncColumnsAction(payload));
+    if (action === &#x27;setCell&#x27;) return respond(setCellAction(payload));
+    if (action === &#x27;deleteStudent&#x27;) return respond(deleteStudentAction(payload));
     return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
   } catch (err) {
     return respond({ ok: false, error: String(err) });
@@ -803,14 +805,15 @@ function findStudentRow(sheet, studentId) {
 
 /* ---------- Actions ---------- */
 
-function logAttendance(p) {
+// Finds (creating if needed) the column for this date/mode and the student&#x27;s
+// row. Shared by scanning and by manual edits.
+function locateCell(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
 
   var colInfo = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
-  var targetCol = colInfo.col;
   if (colInfo.created) {
-    // First scan of this date/mode: every other tab gets the same column,
+    // First time this date/mode is used: every other tab gets the same column,
     // so all groups end up with the same set of events.
     getSS().getSheets().forEach(function (other) {
       if (other.getName() !== sheet.getName()) {
@@ -827,21 +830,50 @@ function logAttendance(p) {
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
+  return { sheet: sheet, row: row, col: colInfo.col };
+}
 
-  var cell = sheet.getRange(row, targetCol);
-  var existing = normalizeTimeText(cell.getDisplayValue());
-  if (existing) {
-    return { ok: true, duplicate: true, existing: existing };
-  }
-  // Plain-text format FIRST, so Sheets keeps &quot;5:28 PM&quot; as text instead of
-  // converting it into a Time value.
-  cell.setNumberFormat(&#x27;@&#x27;).setValue(p.time).setHorizontalAlignment(&#x27;center&#x27;);
-  if (p.mode === &#x27;out&#x27;) {
+// Plain-text format FIRST, so Sheets keeps &quot;5:28 PM&quot; as text instead of
+// converting it into a Time value.
+function writeTime(cell, mode, time) {
+  cell.setNumberFormat(&#x27;@&#x27;).setValue(time).setHorizontalAlignment(&#x27;center&#x27;);
+  if (mode === &#x27;out&#x27;) {
     cell.setBackground(COLOR_OUT_BG).setFontColor(COLOR_OUT_FG);
   } else {
     cell.setBackground(COLOR_PRESENT_BG).setFontColor(COLOR_PRESENT_FG);
   }
+}
+
+function logAttendance(p) {
+  var loc = locateCell(p);
+  if (loc.error) return { ok: false, error: loc.error };
+
+  var cell = loc.sheet.getRange(loc.row, loc.col);
+  var existing = normalizeTimeText(cell.getDisplayValue());
+  if (existing) {
+    return { ok: true, duplicate: true, existing: existing };
+  }
+  writeTime(cell, p.mode, p.time);
   return { ok: true, duplicate: false };
+}
+
+// Manual entry/edit from the app: unlike a scan, this overwrites whatever is
+// already in the cell.
+function setCellAction(p) {
+  var loc = locateCell(p);
+  if (loc.error) return { ok: false, error: loc.error };
+  writeTime(loc.sheet.getRange(loc.row, loc.col), p.mode, p.time);
+  return { ok: true };
+}
+
+// Removes the student&#x27;s whole row (name, ID and every logged time).
+function deleteStudentAction(p) {
+  var sheet = getSS().getSheetByName(p.group);
+  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  var row = findStudentRow(sheet, p.studentId);
+  if (row === -1) return { ok: true, alreadyGone: true }; // nothing to delete is fine
+  sheet.deleteRow(row);
+  return { ok: true };
 }
 
 function clearCellAction(p) {
@@ -1127,6 +1159,24 @@ function buildSnapshot() {
   </div>
 </div>
 
+<!-- Enter / edit a single time cell -->
+<div class="modal-backdrop" id="cellEditBackdrop">
+  <div class="modal">
+    <h3 id="cellEditTitle">Enter time</h3>
+    <p class="sub" id="cellEditSub"></p>
+    <div class="field">
+      <label for="cellEditInput">Time</label>
+      <input type="time" id="cellEditInput">
+      <p class="help-text">If this group is synced, the change is saved to the Google Sheet too.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="cellEditCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-danger hidden" id="cellEditClearBtn" style="flex:1">Clear</button>
+      <button class="btn btn-primary" id="cellEditSaveBtn" style="flex:1">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- Libraries: try the local bundled copies first (works fully offline); if either
@@ -1171,7 +1221,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'shared-events-2026-08-18';
+const BUILD_TAG = 'edit-cells-sync-2026-08-18';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
@@ -1849,6 +1899,119 @@ function addOrUpdateStudent(id, name, markPresentForKey, mode){
   return s;
 }
 
+/* ============================== Edit / enter a single time ============================== */
+let cellEditCtx = null;
+
+function timeTextTo24h(t){ // "5:28 PM" -> "17:28"
+  const m = /^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/.exec((t||'').trim());
+  if(!m) return '';
+  let h = parseInt(m[1],10);
+  if(m[3]) h = (h % 12) + (/p/i.test(m[3]) ? 12 : 0);
+  return String(h).padStart(2,'0') + ':' + m[2];
+}
+function time24hToText(v){ // "17:28" -> "5:28 PM"
+  const m = /^(\d{1,2}):(\d{2})/.exec(v||'');
+  if(!m) return '';
+  let h = parseInt(m[1],10);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${ap}`;
+}
+
+function openCellEditor(group, student, sessionKey, mode){
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  cellEditCtx = { group, groupName: state.activeGroupId, student, sessionKey, mode };
+  modalOpen = true; // pause scanning while editing
+  $('cellEditTitle').textContent = current ? 'Edit time' : 'Enter time';
+  $('cellEditSub').textContent = `${student.name || student.id} — ${sessionKey} · ${mode==='out' ? 'Time Out' : 'Time In'}`;
+  $('cellEditInput').value = timeTextTo24h(current);
+  $('cellEditClearBtn').classList.toggle('hidden', !current);
+  $('cellEditBackdrop').classList.add('open');
+  setTimeout(()=>$('cellEditInput').focus(), 50);
+}
+function closeCellEditor(){
+  $('cellEditBackdrop').classList.remove('open');
+  modalOpen = false;
+  cellEditCtx = null;
+}
+function saveCellEdit(){
+  if(!cellEditCtx) return;
+  const text = time24hToText($('cellEditInput').value);
+  if(!text){ alert('Pick a time first.'); return; }
+  const { group, groupName, student, sessionKey, mode } = cellEditCtx;
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  closeCellEditor();
+  if(text === current) return;
+  setAttendanceCellSynced(group, groupName, student, sessionKey, mode, text);
+}
+function clearFromCellEditor(){
+  if(!cellEditCtx) return;
+  const { group, student, sessionKey, mode } = cellEditCtx;
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  if(!confirm(`Clear ${student.name || student.id}'s ${mode==='out' ? 'Time Out' : 'Time In'} for "${sessionKey}" (currently ${current})?\n\nThis can't be undone.`)) return;
+  closeCellEditor();
+  clearAttendanceCellSynced(group, student, sessionKey, mode);
+}
+
+// Writes a manually entered/edited time locally, then to the Sheet if synced.
+function setAttendanceCellSynced(group, groupName, student, sessionKey, mode, text){
+  if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
+  student.attendance[sessionKey][mode] = text;
+  const eventName = (group.eventNames && group.eventNames[sessionKey]) || currentEventName();
+  registerSession(sessionKey, mode, eventName);
+  saveState();
+  if(!updateAttendanceCell(student.key, sessionKey, mode, text)) renderTable();
+  showToast('Saved');
+
+  if(group.syncMode === 'sheets'){
+    const payload = { action:'setCell', group: groupName, studentId: student.id, studentName: student.name, sessionLabel: sessionKey, mode, time: text, eventName };
+    sheetsPost(payload).catch(err=>{
+      console.error('Edit failed to sync, queued for retry:', err);
+      queuePendingSync(payload);
+      showToast('⚠️ Could not save on the Sheet — will retry');
+    });
+  }
+}
+
+function renameStudentSynced(group, student){
+  const newName = prompt('Full name', student.name);
+  if(newName === null) return;
+  student.name = newName.trim();
+  saveState();
+  renderTable();
+  if(group && group.syncMode === 'sheets'){
+    // "addStudent" on an existing ID just updates the name in that row.
+    const payload = { action:'addStudent', group: state.activeGroupId, studentId: student.id, studentName: student.name };
+    sheetsPost(payload).catch(err=>{
+      console.error('Rename failed to sync, queued for retry:', err);
+      queuePendingSync(payload);
+      showToast('⚠️ Could not save the new name on the Sheet — will retry');
+    });
+  }
+}
+
+// Network-first for synced groups: if the Sheet can't be updated, nothing is
+// deleted here either (otherwise the next refresh would just bring them back).
+async function deleteStudentSynced(group, student){
+  const groupName = state.activeGroupId;
+  if(group && group.syncMode === 'sheets'){
+    try{
+      await sheetsPost({ action:'deleteStudent', group: groupName, studentId: student.id });
+    }catch(err){
+      alert('Could not remove them on the Google Sheet, so nothing was deleted: ' + err.message);
+      return;
+    }
+  }
+  if(group) group.roster = group.roster.filter(x=>x.key!==student.key);
+  // Drop any queued writes for this student so they can't re-create the row later.
+  if(Array.isArray(state.pendingSync)){
+    state.pendingSync = state.pendingSync.filter(p=>!(p.group===groupName && p.studentId===student.id));
+  }
+  saveState();
+  renderTable();
+  showToast('Removed');
+}
+
 function deleteStudent(key){
   const g = currentGroup();
   if(!g) return;
@@ -2254,9 +2417,9 @@ function updateAttendanceCell(studentKey, sessionKey, mode, value){
   cell.classList.toggle('present', !!value);
   cell.classList.toggle('empty-cell', !value);
   if(mode==='out') cell.classList.toggle('out-cell', !!value);
-  cell.classList.toggle('editable-cell', !!value);
-  if(value) cell.title = `Tap to clear this ${mode==='out'?'Time Out':'Time In'} (e.g. if scanned by mistake)`;
-  else cell.removeAttribute('title');
+  cell.classList.add('editable-cell');
+  const modeText = mode==='out' ? 'Time Out' : 'Time In';
+  cell.title = value ? `Tap to edit or clear this ${modeText}` : `Tap to enter a ${modeText} manually`;
   const absentCell = row.querySelector('td.col-absent');
   if(absentCell) setAbsentCell(absentCell, countAbsentInRow(row));
   return true;
@@ -2395,29 +2558,17 @@ function renderTable(){
         if(modes.in){
           const tdIn = document.createElement('td'); tdIn.className = 'col-in ' + (rec.in ? 'present' : 'empty-cell'); tdIn.dataset.col = col;
           tdIn.textContent = rec.in || '—';
-          if(rec.in){
-            tdIn.classList.add('editable-cell');
-            tdIn.title = 'Tap to clear this Time In (e.g. if scanned by mistake)';
-            tdIn.onclick = ()=>{
-              if(confirm(`Clear ${s.name || s.id}'s Time In for "${col}" (currently ${rec.in})?\n\nThis can't be undone.`)){
-                clearAttendanceCellSynced(group, s, col, 'in');
-              }
-            };
-          }
+          tdIn.classList.add('editable-cell');
+          tdIn.title = rec.in ? 'Tap to edit or clear this Time In' : 'Tap to enter a Time In manually';
+          tdIn.onclick = ()=> openCellEditor(group, s, col, 'in');
           tr.appendChild(tdIn);
         }
         if(modes.out){
           const tdOut = document.createElement('td'); tdOut.className = 'col-out ' + (rec.out ? 'present out-cell' : 'empty-cell'); tdOut.dataset.col = col;
           tdOut.textContent = rec.out || '—';
-          if(rec.out){
-            tdOut.classList.add('editable-cell');
-            tdOut.title = 'Tap to clear this Time Out (e.g. if scanned by mistake)';
-            tdOut.onclick = ()=>{
-              if(confirm(`Clear ${s.name || s.id}'s Time Out for "${col}" (currently ${rec.out})?\n\nThis can't be undone.`)){
-                clearAttendanceCellSynced(group, s, col, 'out');
-              }
-            };
-          }
+          tdOut.classList.add('editable-cell');
+          tdOut.title = rec.out ? 'Tap to edit or clear this Time Out' : 'Tap to enter a Time Out manually';
+          tdOut.onclick = ()=> openCellEditor(group, s, col, 'out');
           tr.appendChild(tdOut);
         }
       });
@@ -2427,12 +2578,12 @@ function renderTable(){
       tr.appendChild(tdAbsent);
       const tdAct = document.createElement('td'); tdAct.className='col-actions';
       const editBtn = document.createElement('button'); editBtn.className='row-icon-btn'; editBtn.textContent='✎'; editBtn.title='Rename';
-      editBtn.onclick = ()=>{
-        const newName = prompt('Full name', s.name);
-        if(newName !== null){ s.name = newName.trim(); saveState(); renderTable(); }
-      };
+      editBtn.onclick = ()=> renameStudentSynced(group, s);
       const delBtn = document.createElement('button'); delBtn.className='row-icon-btn'; delBtn.textContent='🗑'; delBtn.title='Delete';
-      delBtn.onclick = ()=>{ if(confirm(`Remove ${s.name || s.id} from the roster?`)) deleteStudent(s.key); };
+      delBtn.onclick = ()=>{
+        const extra = (group && group.syncMode === 'sheets') ? '\n\nThis also removes them (and their logged times) from the Google Sheet.' : '';
+        if(confirm(`Remove ${s.name || s.id} from the roster?${extra}`)) deleteStudentSynced(group, s);
+      };
       tdAct.appendChild(editBtn); tdAct.appendChild(delBtn);
       tr.appendChild(tdAct);
       body.appendChild(tr);
@@ -2914,6 +3065,11 @@ function init(){
   });
   $('exportXlsxBtn').addEventListener('click', exportXLSX);
 
+  $('cellEditCancelBtn').addEventListener('click', closeCellEditor);
+  $('cellEditSaveBtn').addEventListener('click', saveCellEdit);
+  $('cellEditClearBtn').addEventListener('click', clearFromCellEditor);
+  $('cellEditBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='cellEditBackdrop') closeCellEditor(); });
+  $('cellEditInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveCellEdit(); } });
   $('modalCancelBtn').addEventListener('click', closeAddModal);
   $('modalConfirmBtn').addEventListener('click', confirmAddModal);
   $('modalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='modalBackdrop') closeAddModal(); });
