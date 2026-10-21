@@ -85,17 +85,18 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
      make room for it. */
   .lower-grid{
     display:grid;
-    grid-template-columns:380px 1fr;
+    grid-template-columns:380px minmax(0,1fr);
     gap:16px;
     flex:1 1 auto;
     min-height:0;
+    min-width:0;
   }
   .col-left{display:flex;flex-direction:column;overflow-y:auto;min-height:0;}
-  .col-right{display:flex;flex-direction:column;min-height:0;}
+  .col-right{display:flex;flex-direction:column;min-height:0;min-width:0;}
   .col-left .card{margin-bottom:0;flex-shrink:0;padding:16px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;}
-  .col-right .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-bottom:0;}
+  .col-right .card{flex:1 1 auto;min-height:0;min-width:0;max-width:100%;display:flex;flex-direction:column;margin-bottom:0;}
   .col-right .card > *{flex-shrink:0;}
-  .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;max-height:none;}
+  .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;min-width:0;max-width:100%;max-height:none;overflow:auto;}
 
   /* Scanner card content centers nicely in the taller column it now has to itself */
   .col-left .viewfinder{max-width:300px;}
@@ -1221,7 +1222,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'edit-cells-sync-2026-08-18';
+const BUILD_TAG = 'log-scroll-fix-2026-08-18';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 
 function loadState(){
