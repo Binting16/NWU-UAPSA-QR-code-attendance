@@ -85,7 +85,7 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
      make room for it. */
   .lower-grid{
     display:grid;
-    grid-template-columns:380px minmax(0,1fr);
+    grid-template-columns:clamp(340px,26%,440px) minmax(0,1fr);
     gap:16px;
     flex:1 1 auto;
     min-height:0;
@@ -99,8 +99,8 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
   .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;min-width:0;max-width:100%;max-height:none;overflow:auto;}
 
   /* Scanner card content centers nicely in the taller column it now has to itself */
-  .col-left .viewfinder{max-width:300px;}
-  .col-left .result-banner{margin-top:auto;}
+  .col-left .viewfinder{max-width:360px;}
+  .col-right .scan-panel{flex-shrink:0;}
 }
 
 /* Extra breathing room on large monitors (e.g. 1920x1080 at 100% scale) --
@@ -255,21 +255,45 @@ header.topbar{
   width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#FBFCFE;
 }
 
-/* result banner */
-.result-banner{
-  margin-top:14px;border-radius:14px;padding:14px;border:1.5px dashed var(--border);
-  display:flex;align-items:center;gap:12px;background:#FBFCFE;transition:all .15s ease;
+/* ---------- big scan result panel ---------- */
+.scan-panel{
+  display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 18px;
+  border-radius:16px;border:2px dashed var(--border);background:#FBFCFE;
+  transition:background .15s ease,border-color .15s ease;
 }
-.result-banner .rb-icon{font-size:26px;line-height:1;width:34px;text-align:center;flex-shrink:0;}
-.result-banner .rb-text{min-width:0;}
-.result-banner .rb-title{font-weight:700;font-size:14px;margin:0 0 2px;}
-.result-banner .rb-sub{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin:0;word-break:break-word;}
-.result-banner.success{border-style:solid;border-color:var(--success);background:var(--success-bg);}
-.result-banner.success .rb-title{color:var(--success-ink);}
-.result-banner.duplicate{border-style:solid;border-color:var(--accent);background:var(--warn-bg);}
-.result-banner.duplicate .rb-title{color:var(--warn);}
-.result-banner.unknown{border-style:solid;border-color:var(--danger);background:var(--danger-bg);}
-.result-banner.unknown .rb-title{color:var(--danger);}
+.scan-panel .sp-icon{font-size:38px;line-height:1;width:48px;text-align:center;flex-shrink:0;}
+.scan-panel .sp-main{flex:1 1 auto;min-width:0;}
+.scan-panel .sp-name{
+  margin:0;font-weight:800;font-size:clamp(22px,2.6vw,40px);line-height:1.12;letter-spacing:-.01em;
+  overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.scan-panel .sp-meta{margin:4px 0 0;font-size:14px;color:var(--muted);font-family:var(--font-mono);word-break:break-word;}
+.scan-panel .sp-meta:empty{display:none;}
+.scan-panel .sp-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+.sp-chip{
+  display:inline-block;padding:6px 14px;border-radius:999px;font-weight:800;white-space:nowrap;
+  font-size:clamp(13px,1.2vw,17px);background:#fff;border:1px solid var(--border);color:var(--ink);
+}
+.sp-chip.in{background:var(--primary);border-color:var(--primary);color:#fff;}
+.sp-chip.out{background:var(--danger);border-color:var(--danger);color:#fff;}
+.sp-chip.dup{background:var(--accent);border-color:var(--accent);color:#3D2A05;}
+.sp-chip.bad{background:var(--danger);border-color:var(--danger);color:#fff;}
+.sp-chip.sp-absent{background:transparent;border:none;padding:0;font-size:14px;font-weight:700;color:var(--muted);}
+.sp-chip.sp-absent.has-absences{color:var(--danger);}
+.scan-panel.success{border-style:solid;border-color:var(--success);background:var(--success-bg);}
+.scan-panel.success .sp-name{color:var(--success-ink);}
+.scan-panel.duplicate{border-style:solid;border-color:var(--accent);background:var(--warn-bg);}
+.scan-panel.duplicate .sp-name{color:var(--warn);}
+.scan-panel.unknown{border-style:solid;border-color:var(--danger);background:var(--danger-bg);}
+.scan-panel.unknown .sp-name{color:var(--danger);}
+/* Nothing scanned yet: shrink to a slim bar so the log keeps its height */
+.scan-panel:not(.success):not(.duplicate):not(.unknown){padding:10px 16px;}
+.scan-panel:not(.success):not(.duplicate):not(.unknown) .sp-icon{font-size:22px;width:28px;}
+.scan-panel:not(.success):not(.duplicate):not(.unknown) .sp-name{font-size:16px;font-weight:700;color:var(--muted);}
+@media(max-width:560px){
+  .scan-panel{flex-wrap:wrap;}
+  .scan-panel .sp-side{flex-direction:row;align-items:center;width:100%;justify-content:space-between;}
+}
 
 /* ---------- Table ---------- */
 .summary-line{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;}
@@ -516,18 +540,23 @@ td.col-in,td.col-out{min-width:64px;}
             <button type="button" class="btn btn-primary" id="manualSubmitBtn">Submit</button>
           </div>
         </div>
-
-        <div class="result-banner" id="resultBanner">
-          <div class="rb-icon" id="rbIcon">📷</div>
-          <div class="rb-text">
-            <p class="rb-title" id="rbTitle">Ready to scan</p>
-            <p class="rb-sub" id="rbSub">Logged entries will appear in the table below</p>
-          </div>
-        </div>
         </section>
       </div>
 
       <div class="col-right">
+        <!-- Big scan result: the name of whoever just scanned -->
+        <div class="scan-panel" id="resultBanner" aria-live="polite">
+          <div class="sp-icon" id="rbIcon">📷</div>
+          <div class="sp-main">
+            <p class="sp-name" id="rbTitle">Ready to scan</p>
+            <p class="sp-meta" id="rbSub"></p>
+          </div>
+          <div class="sp-side">
+            <span class="sp-chip hidden" id="rbStatus"></span>
+            <span class="sp-chip sp-absent hidden" id="rbAbsent"></span>
+          </div>
+        </div>
+
         <!-- Roster / Log -->
         <section class="card">
           <p class="card-title"><span class="tick"></span>Attendance Log</p>
@@ -625,7 +654,8 @@ td.col-in,td.col-out{min-width:64px;}
  *
  * Every tab always has the SAME set of date columns: the first scan of a
  * date/mode in ANY tab, by anyone, adds that column (with its event name) to
- * ALL tabs. That keeps the number of events equal across groups, so absence
+ * ALL tabs. Side-by-side columns with the same event name share ONE merged
+ * title cell. That keeps the number of events equal across groups, so absence
  * counts are comparable. Deleting a date column removes it from every tab.
  *
  * Each worksheet TAB in the spreadsheet is treated as one &quot;group&quot; in the app.
@@ -664,6 +694,7 @@ function doPost(e) {
     if (action === &#x27;syncColumns&#x27;) return respond(syncColumnsAction(payload));
     if (action === &#x27;setCell&#x27;) return respond(setCellAction(payload));
     if (action === &#x27;deleteStudent&#x27;) return respond(deleteStudentAction(payload));
+    if (action === &#x27;moveStudent&#x27;) return respond(moveStudentAction(payload));
     return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
   } catch (err) {
     return respond({ ok: false, error: String(err) });
@@ -752,6 +783,66 @@ function findDateColIndex(headerRow, sessionLabel, suffix) {
 // that ONE column — plus its own title cell above it — if it doesn&#x27;t exist
 // yet. The other mode&#x27;s column for this same date is only created later,
 // if and when it&#x27;s actually used; nothing is set up ahead of time.
+/* ---------- Event title banners ----------
+   Side-by-side date columns that share the same event name get ONE merged
+   title cell (e.g. &quot;Intramurals Day 1&quot; across AM + PM, Time In + Time Out).
+   In Sheets only the first cell of a merged range holds the text, so every
+   read of row 1 goes through readTitles(), which copies it across the
+   merged cells. */
+function normalizeTitle(t) {
+  return String(t === null || t === undefined ? &#x27;&#x27; : t).trim().toLowerCase();
+}
+
+function readTitles(sheet, lastCol) {
+  var range = sheet.getRange(1, 1, 1, lastCol);
+  var titles = range.getDisplayValues()[0];
+  range.getMergedRanges().forEach(function (m) {
+    if (m.getRow() !== 1) return;
+    var first = m.getColumn() - 1; // 0-indexed
+    var text = titles[first];
+    for (var i = 0; i &lt; m.getNumColumns(); i++) {
+      if (first + i &lt; titles.length) titles[first + i] = text;
+    }
+  });
+  return titles;
+}
+
+function styleTitleRange(range) {
+  range.setBackground(COLOR_PRIMARY_TINT)
+    .setFontColor(COLOR_PRIMARY)
+    .setFontWeight(&#x27;bold&#x27;)
+    .setHorizontalAlignment(&#x27;center&#x27;)
+    .setVerticalAlignment(&#x27;middle&#x27;);
+}
+
+// Un-merges the date part of the title row and writes each column&#x27;s own
+// event name back into its cell. Returns the names (index 0 = column A).
+function explodeEventTitles(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol &lt; 3) return [];
+  var titles = readTitles(sheet, lastCol);
+  var dateRange = sheet.getRange(1, 3, 1, lastCol - 2);
+  dateRange.breakApart();
+  dateRange.setNumberFormat(&#x27;@&#x27;).setValues([titles.slice(2)]);
+  styleTitleRange(dateRange);
+  return titles;
+}
+
+// Re-merges every run of adjacent date columns that share an event name.
+function mergeEventTitles(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol &lt; 3) return;
+  var titles = explodeEventTitles(sheet);
+  var c = 3; // first date column (1-indexed)
+  while (c &lt;= lastCol) {
+    var key = normalizeTitle(titles[c - 1]);
+    var end = c;
+    while (key !== &#x27;&#x27; &amp;&amp; end + 1 &lt;= lastCol &amp;&amp; normalizeTitle(titles[end]) === key) end++;
+    if (end &gt; c) sheet.getRange(1, c, 1, end - c + 1).merge();
+    c = end + 1;
+  }
+}
+
 function createDateColumn(sheet, sessionLabel, mode, eventName) {
   ensureHeaderRows(sheet);
   var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
@@ -784,7 +875,9 @@ function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
   var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
   var existingCol = findDateColIndex(getHeaderRow(sheet), sessionLabel, suffix);
   if (existingCol !== -1) return { col: existingCol, created: false };
-  return { col: createDateColumn(sheet, sessionLabel, mode, eventName), created: true };
+  var newCol = createDateColumn(sheet, sessionLabel, mode, eventName);
+  mergeEventTitles(sheet); // same event name as the neighbouring column(s) -&gt; one banner
+  return { col: newCol, created: true };
 }
 
 // Gives EVERY tab this date/mode column (no-op for tabs that already have it).
@@ -903,10 +996,12 @@ function deleteColumnAction(p) {
     var headerRow = getHeaderRow(sheet);
     var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
     var outCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
-    // Higher column index first so deleting one doesn&#x27;t shift the other.
-    [inCol, outCol].filter(function (c) { return c !== -1; })
-      .sort(function (a, b) { return b - a; })
-      .forEach(function (c) { sheet.deleteColumn(c); deletedAny = true; });
+    var cols = [inCol, outCol].filter(function (c) { return c !== -1; })
+      .sort(function (a, b) { return b - a; }); // higher index first so deleting one doesn&#x27;t shift the other
+    if (cols.length === 0) return;
+    explodeEventTitles(sheet); // so no event name is lost when a merged banner&#x27;s first column is deleted
+    cols.forEach(function (c) { sheet.deleteColumn(c); deletedAny = true; });
+    mergeEventTitles(sheet);
   });
   if (!deletedAny) return { ok: false, error: &#x27;That date column was not found.&#x27; };
   return { ok: true };
@@ -934,7 +1029,7 @@ function syncColumnsAction(p) {
     var lastCol = sheet.getLastColumn();
     if (sheet.getLastRow() &lt; 2 || lastCol &lt; 3) return;
     var headers = sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
-    var titles = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+    var titles = readTitles(sheet, lastCol);
     for (var c = 2; c &lt; lastCol; c++) {
       var m = /^(.*) - (Time In|Time Out)$/.exec(String(headers[c] || &#x27;&#x27;));
       if (m) add(m[1], m[2] === &#x27;Time Out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, titles[c]);
@@ -947,12 +1042,54 @@ function syncColumnsAction(p) {
     var have = {};
     var headers = sheet.getRange(2, 1, 1, Math.max(sheet.getLastColumn(), 2)).getDisplayValues()[0];
     headers.forEach(function (h) { have[h] = true; });
+    var createdHere = 0;
     union.forEach(function (u) {
       var header = u.label + &#x27; - &#x27; + (u.mode === &#x27;out&#x27; ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;);
-      if (!have[header]) { createDateColumn(sheet, u.label, u.mode, u.eventName); created++; }
+      if (!have[header]) { createDateColumn(sheet, u.label, u.mode, u.eventName); created++; createdHere++; }
     });
+    if (createdHere &gt; 0) mergeEventTitles(sheet);
   });
   return { ok: true, columns: union.length, created: created };
+}
+
+// Moves a student (name, ID and every logged time) from one tab to another,
+// then removes the old row. The new row is written first, so if anything goes
+// wrong part-way they can never be lost — at worst they exist in both tabs.
+function moveStudentAction(p) {
+  var ss = getSS();
+  var from = ss.getSheetByName(p.fromGroup);
+  var to = ss.getSheetByName(p.toGroup);
+  if (!from) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.fromGroup + &#x27;&quot; in this sheet.&#x27; };
+  if (!to) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.toGroup + &#x27;&quot; in this sheet.&#x27; };
+  if (from.getName() === to.getName()) return { ok: false, error: &#x27;That is already their group.&#x27; };
+
+  var fromRow = findStudentRow(from, p.studentId);
+  if (fromRow === -1) return { ok: false, error: &#x27;That student was not found in &quot;&#x27; + p.fromGroup + &#x27;&quot;.&#x27; };
+  if (findStudentRow(to, p.studentId) !== -1) return { ok: false, error: &#x27;They are already in &quot;&#x27; + p.toGroup + &#x27;&quot;.&#x27; };
+
+  var lastCol = from.getLastColumn();
+  var headers = from.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
+  var titles = readTitles(from, lastCol);
+  var values = from.getRange(fromRow, 1, 1, lastCol).getDisplayValues()[0];
+
+  ensureHeaderRows(to);
+  var toRow = Math.max(to.getLastRow() + 1, 3);
+  to.getRange(toRow, 1).setValue(values[0] || &#x27;&#x27;);
+  to.getRange(toRow, 2).setNumberFormat(&#x27;@&#x27;).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+
+  for (var c = 2; c &lt; lastCol; c++) {
+    var m = /^(.*) - (Time In|Time Out)$/.exec(String(headers[c] || &#x27;&#x27;));
+    if (!m) continue;
+    var time = normalizeTimeText(values[c]);
+    if (!time) continue;
+    var mode = (m[2] === &#x27;Time Out&#x27;) ? &#x27;out&#x27; : &#x27;in&#x27;;
+    var info = ensureDateColumn(to, m[1], mode, titles[c]);
+    if (info.created) ensureColumnInAllTabs(m[1], mode, titles[c]); // keep every tab on the same events
+    writeTime(to.getRange(toRow, info.col), mode, time);
+  }
+
+  from.deleteRow(fromRow);
+  return { ok: true };
 }
 
 function addStudentAction(p) {
@@ -989,7 +1126,7 @@ function buildSnapshot() {
     }
 
     var headerRow = sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
-    var titleRow = sheet.getRange(1, 1, 1, lastCol).getDisplayValues()[0];
+    var titleRow = readTitles(sheet, lastCol);
     var dateColumns = [];
     var eventNames = {};
     var modes = {}; // label -&gt; { in: bool, out: bool } — which columns exist, even if empty
@@ -1065,6 +1202,23 @@ function buildSnapshot() {
       <label for="lockedGroupSelect">This device logs into</label>
       <select id="lockedGroupSelect"></select>
     </div>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
+    <label>Backup &amp; restore</label>
+    <p class="help-text">Save everything on this device to a file, or load one back &mdash; handy before clearing your browser or switching devices. Your Google Sheets link is left out unless you tick the box below.</p>
+    <div class="checkbox-row" style="margin-top:10px;">
+      <input type="checkbox" id="backupIncludeLink">
+      <label for="backupIncludeLink">Include my Google Sheets link</label>
+    </div>
+    <p class="help-text">Off by default. With it, a new device can reconnect in one step &mdash; but anyone who has the file can read and write your Sheet, so store it like a password.</p>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-ghost" id="backupDownloadBtn" style="flex:1">Download backup</button>
+      <button class="btn btn-ghost" id="backupRestoreBtn" style="flex:1">Restore&hellip;</button>
+    </div>
+    <input type="file" id="backupFileInput" accept=".json,application/json" hidden>
+    <p class="help-text" id="backupInfo"></p>
   </div>
   <div class="divider"></div>
 
@@ -1160,6 +1314,23 @@ function buildSnapshot() {
   </div>
 </div>
 
+<!-- Move a student to another group -->
+<div class="modal-backdrop" id="moveStudentBackdrop">
+  <div class="modal">
+    <h3>Move to another group</h3>
+    <p class="sub" id="moveStudentSub"></p>
+    <div class="field">
+      <label for="moveStudentSelect">Move to</label>
+      <select id="moveStudentSelect"></select>
+      <p class="help-text">Their logged times move with them. If the groups are synced, the Google Sheet is updated too.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="moveStudentCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="moveStudentConfirmBtn" style="flex:1">Move</button>
+    </div>
+  </div>
+</div>
+
 <!-- Enter / edit a single time cell -->
 <div class="modal-backdrop" id="cellEditBackdrop">
   <div class="modal">
@@ -1222,8 +1393,9 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'log-scroll-fix-2026-08-18';
+const BUILD_TAG = 'scan-panel-2026-08-20';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
+let isRestoring = false; // set while a backup is being restored, so no stray save can overwrite it
 
 function loadState(){
   try{
@@ -1233,6 +1405,7 @@ function loadState(){
   return { fileName:'', groups:{}, groupOrder:[], activeGroupId:null, sheetsUrl:'', lockedGroup:null, pendingSync:[] };
 }
 function saveState(){
+  if(isRestoring) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 function applyAppName(){
@@ -1265,6 +1438,7 @@ function loadSettings(){
   return { appName:'', autoSync:false };
 }
 function saveSettings(){
+  if(isRestoring) return;
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
@@ -1900,6 +2074,313 @@ function addOrUpdateStudent(id, name, markPresentForKey, mode){
   return s;
 }
 
+/* ============================== Backup & restore ============================== */
+const BACKUP_APP_ID = 'qr-attendance-backup';
+const BACKUP_VERSION = 1;
+// Only "look and feel" preferences travel in a backup — not device-specific ones.
+const BACKUP_SETTING_KEYS = ['appName', 'columnWidth', 'importFormat'];
+
+function reloadApp(){ location.reload(); }
+
+// Everything that lives on this device. The retry queue and the device's group lock
+// are never included, and the Sheets link (it can write to your sheet) only when asked.
+function buildBackup(includeLink){
+  const groups = {};
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name];
+    if(g) groups[name] = JSON.parse(JSON.stringify(g));
+  });
+  const savedSettings = {};
+  BACKUP_SETTING_KEYS.forEach(k=>{ if(settings[k] !== undefined) savedSettings[k] = settings[k]; });
+  const backup = {
+    app: BACKUP_APP_ID,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: { groups, groupOrder: state.groupOrder.slice(), activeGroupId: state.activeGroupId, settings: savedSettings }
+  };
+  // Only when explicitly asked: the link lets whoever holds the file read and write the Sheet.
+  const url = (state.sheetsUrl || '').trim();
+  if(includeLink && url){
+    backup.data.sheetsUrl = url;
+    backup.containsSheetsLink = true;
+  }
+  return backup;
+}
+
+function updateBackupInfo(){
+  const el = $('backupInfo'); if(!el) return;
+  const t = settings.lastBackupAt ? new Date(settings.lastBackupAt) : null;
+  el.textContent = (t && !isNaN(t))
+    ? 'Last backup downloaded: ' + t.toLocaleString([], { dateStyle:'medium', timeStyle:'short' })
+    : 'No backup downloaded from this device yet.';
+}
+
+function downloadBackup(){
+  const wantLink = !!$('backupIncludeLink').checked;
+  const hasLink = !!((state.sheetsUrl || '').trim());
+  const backup = buildBackup(wantLink);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qr-attendance-backup-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}${backup.containsSheetsLink ? '-with-sheets-link' : ''}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  settings.lastBackupAt = d.toISOString();
+  saveSettings();
+  updateBackupInfo();
+  $('backupIncludeLink').checked = false; // always off again, so a link is never included by accident
+  showToast(backup.containsSheetsLink ? 'Backup downloaded — it contains your Sheets link, keep it private'
+    : (wantLink && !hasLink ? 'Backup downloaded (no Sheets link was saved, so none included)' : 'Backup downloaded'));
+}
+
+function sanitizeAttendance(att){
+  const out = {};
+  if(att && typeof att === 'object'){
+    Object.keys(att).forEach(label=>{
+      const r = att[label];
+      if(!r || typeof r !== 'object') return;
+      out[label] = { in: typeof r.in === 'string' ? r.in : '', out: typeof r.out === 'string' ? r.out : '' };
+    });
+  }
+  return out;
+}
+
+// Real Apps Script web-app addresses only — a restored link decides where scans get sent.
+const SHEETS_URL_PATTERN = /^https:\/\/script\.google\.com\/(?:macros\/s\/|a\/macros\/[^\/\s]+\/s\/)[A-Za-z0-9_\-]+\/exec$/;
+
+// Checks the file really is one of our backups and cleans every field.
+function validateBackup(obj){
+  if(!obj || typeof obj !== 'object' || obj.app !== BACKUP_APP_ID){
+    return { ok:false, error:"That file isn't a backup made by this app." };
+  }
+  if(typeof obj.version !== 'number' || obj.version > BACKUP_VERSION){
+    return { ok:false, error:'That backup was made by a newer version of the app. Update the app first, then try again.' };
+  }
+  const d = obj.data;
+  if(!d || !d.groups || typeof d.groups !== 'object' || Array.isArray(d.groups)){
+    return { ok:false, error:'That backup file is damaged (no groups found in it).' };
+  }
+  const order = (Array.isArray(d.groupOrder) ? d.groupOrder : []).filter(n=>typeof n === 'string' && Object.prototype.hasOwnProperty.call(d.groups, n));
+  Object.keys(d.groups).forEach(n=>{ if(!order.includes(n)) order.push(n); });
+  const groups = {};
+  const cleanOrder = [];
+  for(const name of order){
+    if(name === '__proto__') continue;
+    const g = d.groups[name];
+    if(!g || typeof g !== 'object' || !Array.isArray(g.roster)){
+      return { ok:false, error:`The group "${name}" in that backup is damaged, so nothing was restored.` };
+    }
+    groups[name] = {
+      dateColumns: Array.isArray(g.dateColumns) ? g.dateColumns.filter(x=>typeof x === 'string') : [],
+      eventNames: (g.eventNames && typeof g.eventNames === 'object') ? g.eventNames : {},
+      columnModes: (g.columnModes && typeof g.columnModes === 'object') ? g.columnModes : {},
+      roster: g.roster
+        .filter(st=>st && typeof st === 'object' && String(st.id === undefined || st.id === null ? '' : st.id).trim() !== '')
+        .map(st=>({ id:String(st.id), key:normalizeId(st.id), name: typeof st.name === 'string' ? st.name : '', attendance: sanitizeAttendance(st.attendance) })),
+      wasSynced: g.syncMode === 'sheets'
+    };
+    cleanOrder.push(name);
+  }
+  let sheetsUrl = '', linkIgnored = false;
+  if(typeof d.sheetsUrl === 'string' && d.sheetsUrl.trim()){
+    const u = d.sheetsUrl.trim();
+    if(SHEETS_URL_PATTERN.test(u)) sheetsUrl = u; else linkIgnored = true;
+  }
+  return { ok:true, groups, order: cleanOrder, activeGroupId: d.activeGroupId, settings: (d.settings && typeof d.settings === 'object') ? d.settings : {}, exportedAt: obj.exportedAt, sheetsUrl, linkIgnored };
+}
+
+// Works out what a restore will do, without changing anything.
+//  - Connected to a Sheet: groups that live in the Sheet are never touched (the
+//    Sheet is the source of truth), so synced groups in the backup are skipped.
+//  - Not connected: synced groups in the backup come back as ordinary local copies.
+function planRestore(parsed){
+  const currentUrl = (state.sheetsUrl || '').trim();
+  const backupUrl = parsed.sheetsUrl || '';
+  const switching = !!(backupUrl && currentUrl && backupUrl !== currentUrl); // the backup is from a different Sheet
+  const adopting = !!(backupUrl && !currentUrl);                            // e.g. a new device getting the link
+  const keepCurrentSynced = !!currentUrl && !switching;                      // the Sheet stays the source of truth
+  const keptSynced = keepCurrentSynced ? state.groupOrder.filter(n=>state.groups[n] && state.groups[n].syncMode === 'sheets') : [];
+  const taken = new Set(keptSynced);
+  const restored = [];
+  let skipped = 0, renamed = 0;
+  parsed.order.forEach(name=>{
+    const g = parsed.groups[name];
+    if(keepCurrentSynced && g.wasSynced){ skipped++; return; } // its live data is in the Sheet
+    let finalName = name;
+    if(taken.has(finalName)){
+      renamed++;
+      let i = 1;
+      finalName = `${name} (restored)`;
+      while(taken.has(finalName)){ i++; finalName = `${name} (restored ${i})`; }
+    }
+    taken.add(finalName);
+    // With the backup's own link restored, its synced groups stay synced; otherwise they become local copies.
+    restored.push({ originalName:name, finalName, group:g, synced: !!(backupUrl && g.wasSynced) });
+  });
+  const droppedSynced = switching ? state.groupOrder.filter(n=>state.groups[n] && state.groups[n].syncMode === 'sheets').length : 0;
+  const replacing = state.groupOrder.filter(n=>!keptSynced.includes(n)).length;
+  const students = restored.reduce((n,r)=>n + r.group.roster.length, 0);
+  return { currentUrl, backupUrl, switching, adopting, keptSynced, restored, skipped, renamed, replacing, droppedSynced, students, parsed };
+}
+
+function applyRestore(plan){
+  const newGroups = {};
+  const newOrder = [];
+  plan.keptSynced.forEach(n=>{ newGroups[n] = state.groups[n]; newOrder.push(n); });
+  plan.restored.forEach(r=>{
+    const g = r.group;
+    newGroups[r.finalName] = { dateColumns:g.dateColumns, eventNames:g.eventNames, columnModes:g.columnModes, roster:g.roster };
+    if(r.synced) newGroups[r.finalName].syncMode = 'sheets';
+    newOrder.push(r.finalName);
+  });
+  const wanted = plan.parsed.activeGroupId;
+  const wantedRestored = plan.restored.find(r=>r.originalName === wanted);
+  const newState = Object.assign({}, state, {
+    groups: newGroups,
+    groupOrder: newOrder,
+    activeGroupId: wantedRestored ? wantedRestored.finalName : (newGroups[state.activeGroupId] ? state.activeGroupId : (newOrder[0] || null)),
+    sheetsUrl: plan.backupUrl || state.sheetsUrl,
+    lockedGroup: (state.lockedGroup && newGroups[state.lockedGroup]) ? state.lockedGroup : null,
+    // Only writes that belong to groups that are still here stay queued.
+    pendingSync: (state.pendingSync || []).filter(q=>plan.keptSynced.includes(q.group))
+  });
+  const newSettings = Object.assign({}, settings);
+  const bs = plan.parsed.settings;
+  if(typeof bs.appName === 'string') newSettings.appName = bs.appName.slice(0, 80);
+  if(typeof bs.columnWidth === 'string' && COLUMN_WIDTH_PRESETS[bs.columnWidth]) newSettings.columnWidth = bs.columnWidth;
+  if(typeof bs.importFormat === 'string' && Array.from($('importFormatSelect').options).some(o=>o.value === bs.importFormat)) newSettings.importFormat = bs.importFormat;
+
+  isRestoring = true; // freeze normal saving so nothing can overwrite what we write next
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+  try{ sessionStorage.setItem('qrJustRestored', '1'); }catch(e){}
+  reloadApp(); // start clean from the restored data
+}
+
+function readFileText(file){
+  if(file && typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>resolve(String(fr.result));
+    fr.onerror = ()=>reject(fr.error);
+    fr.readAsText(file);
+  });
+}
+
+async function restoreFromFile(file){
+  if(!file) return;
+  let obj;
+  try{
+    obj = JSON.parse(await readFileText(file));
+  }catch(e){
+    alert("That file couldn't be read as a backup. Pick a .json file that was downloaded from this app.");
+    return;
+  }
+  const parsed = validateBackup(obj);
+  if(!parsed.ok){ alert(parsed.error); return; }
+  const plan = planRestore(parsed);
+  if(plan.restored.length === 0){
+    alert('Nothing to restore: every group in that backup is a synced group, and its live data is in your Google Sheet.');
+    return;
+  }
+  const when = parsed.exportedAt && !isNaN(new Date(parsed.exportedAt))
+    ? new Date(parsed.exportedAt).toLocaleString([], { dateStyle:'medium', timeStyle:'short' }) : 'an unknown date';
+  const lines = [
+    `Restore the backup from ${when}?`,
+    '',
+    `• ${plan.restored.length} group${plan.restored.length===1?'':'s'}, ${plan.students} student${plan.students===1?'':'s'} will be loaded.`
+  ];
+  if(plan.replacing > 0) lines.push(`• This REPLACES the ${plan.replacing} ${plan.switching ? '' : 'local '}group${plan.replacing===1?'':'s'} currently on this device.`);
+  if(plan.skipped > 0) lines.push(`• ${plan.skipped} synced group${plan.skipped===1?'':'s'} in the backup ${plan.skipped===1?'is':'are'} skipped — ${plan.skipped===1?'its':'their'} live data is in your Google Sheet and stays as it is.`);
+  if(plan.renamed > 0) lines.push(`• ${plan.renamed} restored group${plan.renamed===1?'':'s'} share${plan.renamed===1?'s':''} a name with a synced group and will be named "… (restored)".`);
+  if(plan.adopting) lines.push(`• It also sets this device's Google Sheets link to:\n   ${plan.backupUrl}\n   Only continue if this backup is yours.`);
+  if(plan.switching) lines.push(`• It REPLACES this device's Google Sheets link (and its ${plan.droppedSynced} synced group${plan.droppedSynced===1?'':'s'}) with a different Sheet:\n   ${plan.backupUrl}\n   Scans will go to that Sheet from now on. Only continue if this backup is yours.`);
+  if(parsed.linkIgnored) lines.push("• The Sheets link in the file doesn't look like a Google Apps Script link, so it was ignored.");
+  lines.push((plan.adopting || plan.switching) ? '• Your other device settings are kept.' : '• Your Google Sheets link and device settings are kept.', '', "This can't be undone — download a backup of what's here first if you're not sure.");
+  if(!confirm(lines.join('\n'))) return;
+  applyRestore(plan);
+}
+
+/* ============================== Move a student to another group ============================== */
+let moveCtx = null;
+
+function openMoveStudent(group, student){
+  const fromName = state.activeGroupId;
+  const fromSheets = !!(group && group.syncMode === 'sheets');
+  moveCtx = { fromName, student };
+  modalOpen = true; // pause scanning while the dialog is open
+  $('moveStudentSub').textContent = `${student.name || student.id} · currently in ${fromName}`;
+  const sel = $('moveStudentSelect'); sel.innerHTML = '';
+  let usable = 0;
+  state.groupOrder.forEach(name=>{
+    if(name === fromName) return;
+    const g = state.groups[name]; if(!g) return;
+    const toSheets = g.syncMode === 'sheets';
+    const opt = document.createElement('option'); opt.value = name;
+    if(toSheets !== fromSheets){
+      opt.disabled = true;
+      opt.textContent = `${name} (${toSheets ? 'synced' : 'local'} — can't mix with ${fromSheets ? 'synced' : 'local'} groups)`;
+    } else { opt.textContent = name; usable++; }
+    sel.appendChild(opt);
+  });
+  const firstUsable = Array.from(sel.options).find(o=>!o.disabled);
+  if(firstUsable) sel.value = firstUsable.value;
+  $('moveStudentConfirmBtn').disabled = usable === 0;
+  $('moveStudentBackdrop').classList.add('open');
+}
+function closeMoveStudent(){
+  $('moveStudentBackdrop').classList.remove('open');
+  modalOpen = false;
+  moveCtx = null;
+}
+async function confirmMoveStudent(){
+  if(!moveCtx) return;
+  const { fromName, student } = moveCtx;
+  const toName = $('moveStudentSelect').value;
+  closeMoveStudent();
+  if(!toName) return;
+  await moveStudentBetweenGroups(fromName, toName, student);
+}
+
+// Network-first for synced groups: if the Sheet can't be updated, nothing moves here either.
+async function moveStudentBetweenGroups(fromName, toName, student){
+  const from = state.groups[fromName], to = state.groups[toName];
+  if(!from || !to || fromName === toName) return;
+  const fromSheets = from.syncMode === 'sheets', toSheets = to.syncMode === 'sheets';
+  if(fromSheets !== toSheets){
+    alert('A synced group and a local group can\'t exchange students. Move between two synced groups, or between two local groups.');
+    return;
+  }
+  if(to.roster.some(x=>x.key === student.key)){
+    alert(`${student.name || student.id} is already in "${toName}".`);
+    return;
+  }
+  if(fromSheets){
+    try{
+      await sheetsPost({ action:'moveStudent', fromGroup: fromName, toGroup: toName, studentId: student.id });
+    }catch(err){
+      alert('Could not move them on the Google Sheet, so nothing was moved: ' + err.message);
+      return;
+    }
+  }
+  from.roster = from.roster.filter(x=>x.key !== student.key);
+  to.roster.push(student);
+  reconcileSessions(); // the new group must have every date column their times belong to
+  // Anything still queued for them should now go to their new tab.
+  if(Array.isArray(state.pendingSync)){
+    state.pendingSync.forEach(p=>{ if(p.group === fromName && p.studentId === student.id) p.group = toName; });
+  }
+  saveState();
+  renderGroupTabs();
+  renderTable();
+  showToast(`Moved ${student.name || student.id} to ${toName}`);
+}
+
 /* ============================== Edit / enter a single time ============================== */
 let cellEditCtx = null;
 
@@ -2201,18 +2682,39 @@ function updateModalMarkPresentLabel(){
   if(lbl) lbl.textContent = `Mark ${modeLabel(scanMode)} for today's session`;
 }
 
-function setResultBanner(kind, icon, title, sub){
+// Fills the big scan-result panel. `title` is the big line (the name), `sub` the small
+// line under it (ID · group). `extra` adds the colored badge and the absence count.
+function setResultBanner(kind, icon, title, sub, extra){
   const el = $('resultBanner');
-  el.className = 'result-banner' + (kind ? ' '+kind : '');
+  el.className = 'scan-panel' + (kind ? ' ' + kind : '');
   $('rbIcon').textContent = icon;
   $('rbTitle').textContent = title;
-  $('rbSub').textContent = sub;
+  $('rbSub').textContent = sub || '';
+  const status = $('rbStatus'), absent = $('rbAbsent');
+  const hasStatus = !!(extra && extra.status);
+  status.textContent = hasStatus ? extra.status : '';
+  status.className = 'sp-chip' + (hasStatus && extra.statusKind ? ' ' + extra.statusKind : '') + (hasStatus ? '' : ' hidden');
+  const hasAbs = !!(extra && typeof extra.absences === 'number');
+  absent.textContent = hasAbs ? (extra.absences === 0 ? 'No absences' : `Absences: ${extra.absences}`) : '';
+  absent.className = 'sp-chip sp-absent' + (hasAbs && extra.absences > 0 ? ' has-absences' : '') + (hasAbs ? '' : ' hidden');
 }
 function resetResultBannerSoon(){
   clearTimeout(resetResultBannerSoon._tm);
   resetResultBannerSoon._tm = setTimeout(()=>{
-    setResultBanner('', '📷', 'Ready to scan', 'Logged entries will appear in the table below');
-  }, 2000);
+    setResultBanner('', '📷', 'Ready to scan', '');
+  }, 15000); // long enough to read the name after the person has stepped away
+}
+
+// How many empty In/Out cells this student has in their group (same rule as the table's Absent column).
+function countAbsencesFor(group, student){
+  let n = 0;
+  (group.dateColumns || []).forEach(label=>{
+    const m = getColumnModes(group, label);
+    const rec = student.attendance[label] || {};
+    if(m.in && !rec.in) n++;
+    if(m.out && !rec.out) n++;
+  });
+  return n;
 }
 
 function handleDecodedText(rawText){
@@ -2241,7 +2743,7 @@ async function processScannedCode(rawText){
     const student = g.roster.find(s=>s.key===key);
     if(!student){
       beep(320,160); vibrate(120);
-      setResultBanner('unknown', '⚠️', 'ID not in this group', id);
+      setResultBanner('unknown', '⚠️', 'ID not recognized', id, { status:'NOT IN THIS GROUP', statusKind:'bad' });
       openAddModal({ id, name:'', markPresent:true, fromScan:true, forcedGroup: state.lockedGroup });
       return;
     }
@@ -2253,7 +2755,7 @@ async function processScannedCode(rawText){
   const found = findStudentAcrossGroups(key);
   if(!found){
     beep(320,160); vibrate(120);
-    setResultBanner('unknown', '⚠️', 'ID not in any group', id);
+    setResultBanner('unknown', '⚠️', 'ID not recognized', id, { status:'NOT IN ANY GROUP', statusKind:'bad' });
     openAddModal({ id, name:'', markPresent:true, fromScan:true });
     return;
   }
@@ -2277,7 +2779,7 @@ function logScanResult(group, groupName, student, sessionKey){
   if(rec[scanMode]){
     // Nothing changed -- no need to touch storage, the DOM, or the network.
     beep(520,120); vibrate([30,40,30]);
-    setResultBanner('duplicate', '🔁', `${modeLabel(scanMode)} already logged`, `${student.name || student.id} (${groupName}) — ${rec[scanMode]}`);
+    setResultBanner('duplicate', '🔁', student.name || student.id, `${student.id} · ${groupName}`, { status:`${modeLabel(scanMode).toUpperCase()} ALREADY LOGGED · ${rec[scanMode]}`, statusKind:'dup', absences: countAbsencesFor(group, student) });
     resetResultBannerSoon();
     return;
   }
@@ -2290,7 +2792,7 @@ function logScanResult(group, groupName, student, sessionKey){
   if(!updateAttendanceCell(student.key, sessionKey, scanMode, time)) renderTable();
   beep(880,140); vibrate(40);
   const syncTag = group.syncMode === 'sheets' ? ' 🔗' : '';
-  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${groupName}${syncTag} · ${student.id} — ${time}`);
+  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', student.name || student.id, `${student.id} · ${groupName}${syncTag}`, { status:`${modeLabel(scanMode).toUpperCase()} · ${time}`, statusKind: scanMode==='out' ? 'out' : 'in', absences: countAbsencesFor(group, student) });
   resetResultBannerSoon();
 
   if(group.syncMode === 'sheets'){
@@ -2585,7 +3087,13 @@ function renderTable(){
         const extra = (group && group.syncMode === 'sheets') ? '\n\nThis also removes them (and their logged times) from the Google Sheet.' : '';
         if(confirm(`Remove ${s.name || s.id} from the roster?${extra}`)) deleteStudentSynced(group, s);
       };
-      tdAct.appendChild(editBtn); tdAct.appendChild(delBtn);
+      tdAct.appendChild(editBtn);
+      if(state.groupOrder.length > 1){
+        const moveBtn = document.createElement('button'); moveBtn.className='row-icon-btn'; moveBtn.textContent='⇄'; moveBtn.title='Move to another group';
+        moveBtn.onclick = ()=> openMoveStudent(group, s);
+        tdAct.appendChild(moveBtn);
+      }
+      tdAct.appendChild(delBtn);
       tr.appendChild(tdAct);
       body.appendChild(tr);
     });
@@ -2704,7 +3212,7 @@ async function confirmAddModal(){
   renderTable();
   closeAddModal();
   if(sessionKey){
-    setResultBanner('success', '✅', `${s.name || s.id} — ${modeLabel(mode)}`, `${targetGroup} · ${s.id} — ${s.attendance[sessionKey][mode]}`);
+    setResultBanner('success', mode==='out' ? '🔴' : '✅', s.name || s.id, `${s.id} · ${targetGroup}`, { status:`${modeLabel(mode).toUpperCase()} · ${s.attendance[sessionKey][mode]}`, statusKind: mode==='out' ? 'out' : 'in', absences: countAbsencesFor(state.groups[targetGroup], s) });
     resetResultBannerSoon();
   }
   showToast('Saved');
@@ -2761,27 +3269,31 @@ function buildSheetForGroup(group){
       return row;
     });
 
-  // Title row: sits only above each date's own column(s) (using whichever
-  // event name was active when that date was recorded), not over
-  // Name/Student ID — so a sheet spanning multiple events shows each one
-  // labeled correctly above its own columns instead of one name over everything.
+  // Title row: each date's columns are labeled with the event name that was
+  // active when that date was recorded. Side-by-side columns with the SAME
+  // event name share one merged banner (e.g. "Intramurals Day 1" across AM + PM,
+  // Time In + Time Out) — same as the Google Sheet. Name/Student ID stay blank.
   const eventNames = group.eventNames || {};
+  const colTitles = []; // one entry per date column actually written
+  visibleDateColumns.forEach(c=>{
+    const label = eventNames[c] || 'Attendance';
+    if(colModes[c].in) colTitles.push(label);
+    if(colModes[c].out) colTitles.push(label);
+  });
   const titleRow = [
     { v:'', t:'s', s:blankTitleStyle },
     { v:'', t:'s', s:blankTitleStyle }
   ];
   const merges = [];
-  let colIndex = 2;
-  visibleDateColumns.forEach(c=>{
-    const span = (colModes[c].in && colModes[c].out) ? 2 : 1;
-    const label = eventNames[c] || 'Attendance';
-    titleRow.push({ v:label, t:'s', s:titleStyle });
-    if(span === 2){
-      titleRow.push({ v:'', t:'s', s:titleStyle });
-      merges.push({ s:{r:0,c:colIndex}, e:{r:0,c:colIndex+1} });
-    }
-    colIndex += span;
-  });
+  const sameTitle = (a,b)=> String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  for(let i = 0; i < colTitles.length; ){
+    let j = i;
+    while(j + 1 < colTitles.length && String(colTitles[i]).trim() !== '' && sameTitle(colTitles[i], colTitles[j+1])) j++;
+    titleRow.push({ v:colTitles[i], t:'s', s:titleStyle });
+    for(let k = i + 1; k <= j; k++) titleRow.push({ v:'', t:'s', s:titleStyle });
+    if(j > i) merges.push({ s:{ r:0, c:2 + i }, e:{ r:0, c:2 + j } });
+    i = j + 1;
+  }
 
   titleRow.push({ v:'', t:'s', s:blankTitleStyle }); // blank above the Absent column, same as Name/Student ID
   const aoa = [titleRow, headerRow, ...dataRows];
@@ -3066,6 +3578,12 @@ function init(){
   });
   $('exportXlsxBtn').addEventListener('click', exportXLSX);
 
+  $('backupDownloadBtn').addEventListener('click', downloadBackup);
+  $('backupRestoreBtn').addEventListener('click', ()=>{ $('backupFileInput').value = ''; $('backupFileInput').click(); });
+  $('backupFileInput').addEventListener('change', (e)=>{ restoreFromFile(e.target.files && e.target.files[0]); });
+  $('moveStudentCancelBtn').addEventListener('click', closeMoveStudent);
+  $('moveStudentConfirmBtn').addEventListener('click', confirmMoveStudent);
+  $('moveStudentBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='moveStudentBackdrop') closeMoveStudent(); });
   $('cellEditCancelBtn').addEventListener('click', closeCellEditor);
   $('cellEditSaveBtn').addEventListener('click', saveCellEdit);
   $('cellEditClearBtn').addEventListener('click', clearFromCellEditor);
@@ -3088,7 +3606,7 @@ function init(){
   }
 
   $('clearDataBtn').addEventListener('click', ()=>{
-    if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device. Continue?')){
+    if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device.\n\nTip: tap "Download backup" first if you might want any of it back. Continue?')){
       state = { fileName:'', scanMode: state.scanMode, sessionPeriod: state.sessionPeriod, groups:{}, groupOrder:[], activeGroupId:null };
       saveState();
       $('fileNameInput').value = '';
@@ -3097,6 +3615,10 @@ function init(){
     }
   });
 
+  updateBackupInfo();
+  try{
+    if(sessionStorage.getItem('qrJustRestored')){ sessionStorage.removeItem('qrJustRestored'); showToast('Backup restored'); if((state.sheetsUrl||'').trim() && getSheetsGroups().length) refreshSheets(); }
+  }catch(e){}
   renderTable();
 }
 
