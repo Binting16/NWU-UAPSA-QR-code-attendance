@@ -361,6 +361,8 @@ thead tr.subhead th{
 th.sub-in,th.sub-out{min-width:64px;}
 td.col-in,td.col-out{min-width:64px;}
 .date-th-x{cursor:pointer;opacity:.7;font-weight:700;}
+.sub-th-x{cursor:pointer;opacity:.6;font-weight:700;margin-left:5px;padding:0 3px;}
+.sub-th-x:hover{opacity:1;}
 .empty-state{padding:26px 14px;text-align:center;color:var(--muted);font-size:13.5px;}
 
 /* ---------- Bottom action bar ---------- */
@@ -987,15 +989,17 @@ function clearCellAction(p) {
 }
 
 // Deletes whichever column(s) exist for this date — just Time In, just Time
-// Out, or both if both were ever used. Higher column index is deleted first
+// Out, or both if both were ever used (or only the one named in p.mode). Higher column index is deleted first
 // so removing one doesn&#x27;t shift the other&#x27;s position before it&#x27;s handled.
 function deleteColumnAction(p) {
+  // p.mode = &#x27;in&#x27; or &#x27;out&#x27; removes just that one column; leave it out to remove both.
+  var onlyMode = (p.mode === &#x27;in&#x27; || p.mode === &#x27;out&#x27;) ? p.mode : null;
   var deletedAny = false;
   getSS().getSheets().forEach(function (sheet) {
     if (sheet.getLastRow() &lt; 2) return;
     var headerRow = getHeaderRow(sheet);
-    var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-    var outCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
+    var inCol = (onlyMode === &#x27;out&#x27;) ? -1 : findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
+    var outCol = (onlyMode === &#x27;in&#x27;) ? -1 : findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
     var cols = [inCol, outCol].filter(function (c) { return c !== -1; })
       .sort(function (a, b) { return b - a; }); // higher index first so deleting one doesn&#x27;t shift the other
     if (cols.length === 0) return;
@@ -1393,7 +1397,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'scan-panel-2026-08-20';
+const BUILD_TAG = 'delete-single-column-2026-08-20';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 let isRestoring = false; // set while a backup is being restored, so no stray save can overwrite it
 
@@ -2511,23 +2515,53 @@ function deleteColumn(label){
     if(g.eventNames) delete g.eventNames[label];
     g.roster.forEach(s=>{ delete s.attendance[label]; });
   });
+  dropQueuedWritesFor(label, null);
   saveState();
   renderTable();
 }
 
+// Removes just the Time In OR the Time Out column of a date, in every group.
+// If that was the date's only column, the whole date goes.
+function deleteColumnMode(label, mode){
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name]; if(!g) return;
+    ensureSessionFields(g);
+    const m = Object.assign({ in:false, out:false }, getColumnModes(g, label));
+    m[mode] = false;
+    g.roster.forEach(s=>{ if(s.attendance[label]) s.attendance[label][mode] = ''; });
+    if(!m.in && !m.out){
+      g.dateColumns = g.dateColumns.filter(c=>c!==label);
+      delete g.columnModes[label];
+      delete g.eventNames[label];
+      g.roster.forEach(s=>{ delete s.attendance[label]; });
+    } else {
+      g.columnModes[label] = m;
+    }
+  });
+  dropQueuedWritesFor(label, mode);
+  saveState();
+  renderTable();
+}
+
+// Queued (not yet synced) writes for a column that was just deleted would re-create it later.
+function dropQueuedWritesFor(label, mode){
+  if(!Array.isArray(state.pendingSync)) return;
+  state.pendingSync = state.pendingSync.filter(q=>!(q.sessionLabel === label && (!mode || q.mode === mode)));
+}
+
 // Deletes a date column, syncing the deletion to the Google Sheet first when
 // the active group is Sheets-synced (so other devices see it disappear too).
-async function deleteColumnSynced(label){
+async function deleteColumnSynced(label, mode){
   if(sheetsConfigured()){
     try{
-      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label });
+      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label, mode: mode || undefined });
     }catch(err){
       alert('Could not delete on the Google Sheet: ' + err.message);
       return;
     }
   }
-  deleteColumn(label);
-  showToast('Deleted from all groups');
+  if(mode) deleteColumnMode(label, mode); else deleteColumn(label);
+  showToast(mode ? `Removed the ${mode === 'out' ? 'Time Out' : 'Time In'} column from all groups` : 'Deleted from all groups');
 }
 
 /* ============================== Import roster ============================== */
@@ -2975,6 +3009,22 @@ function renderCrossGroupResults(search, currentGroupName){
   });
 }
 
+// The "In" / "Out" cell under a date, with its own × that removes just that one column.
+function makeSubHeader(label, mode, otherModeExists){
+  const th = document.createElement('th');
+  th.className = mode === 'out' ? 'sub-out' : 'sub-in';
+  const txt = document.createElement('span'); txt.textContent = mode === 'out' ? 'Out' : 'In';
+  const modeName = mode === 'out' ? 'Time Out' : 'Time In';
+  const x = document.createElement('span'); x.className = 'sub-th-x'; x.textContent = '×';
+  x.title = `Remove only the ${modeName} column`;
+  x.onclick = ()=>{
+    const keep = otherModeExists ? `\n\n${mode === 'out' ? 'Time In' : 'Time Out'} for this day is kept.` : '\n\nThis is the only column for that day, so the whole day is removed.';
+    if(confirm(`Remove only the ${modeName} column for "${label}" from ALL groups?\n\nEvents are shared, so this deletes those ${modeName} times everywhere.${keep}`)) deleteColumnSynced(label, mode);
+  };
+  th.appendChild(txt); th.appendChild(x);
+  return th;
+}
+
 function renderTable(){
   const group = currentGroup();
   const roster = group ? group.roster : [];
@@ -3018,8 +3068,8 @@ function renderTable(){
     th.appendChild(wrap);
     headRow.appendChild(th);
 
-    if(modes.in){ const thIn = document.createElement('th'); thIn.className='sub-in'; thIn.textContent='In'; subHeadRow.appendChild(thIn); }
-    if(modes.out){ const thOut = document.createElement('th'); thOut.className='sub-out'; thOut.textContent='Out'; subHeadRow.appendChild(thOut); }
+    if(modes.in) subHeadRow.appendChild(makeSubHeader(col, 'in', modes.out));
+    if(modes.out) subHeadRow.appendChild(makeSubHeader(col, 'out', modes.in));
   });
   const thAbsent = document.createElement('th'); thAbsent.className='col-absent'; thAbsent.textContent='Absent'; thAbsent.rowSpan=2;
   thAbsent.title = 'Number of empty time cells for this student (each counts as an absence)';
