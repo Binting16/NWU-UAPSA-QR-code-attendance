@@ -180,7 +180,7 @@ header.topbar{
 .field{margin-bottom:10px;}
 .field:last-child{margin-bottom:0;}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;}
-.field input[type=text],.field input[type=date],.field input[type=time]{
+.field input[type=text],.field input[type=date],.field input[type=time],.field input[type=password]{
   width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
   background:#FBFCFE;color:var(--ink);
 }
@@ -236,6 +236,30 @@ header.topbar{
 }
 .period-btn.active{border-color:transparent;background:var(--primary);color:#fff;}
 .period-btn:active{transform:scale(0.97);}
+.session-pick-field{flex:2 !important;}
+.session-pick-btn{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  text-align:left;padding:10px 14px;border-radius:12px;cursor:pointer;
+  border:2px solid var(--primary);background:var(--primary-tint);color:var(--ink);font-family:inherit;
+}
+.session-pick-btn.empty{border-style:dashed;border-color:var(--accent);background:#FFF8EA;}
+.spb-text{display:flex;flex-direction:column;min-width:0;}
+.spb-event{font-weight:800;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.spb-label{font-size:12.5px;color:var(--muted);font-family:var(--font-mono);}
+.spb-change{font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0;}
+.session-list{max-height:min(46vh,340px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.session-item{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#FBFCFE;cursor:pointer;font-family:inherit;}
+.session-item:hover{border-color:var(--primary);}
+.session-item.current{border:2px solid var(--primary);background:var(--primary-tint);}
+.session-item .si-event{font-weight:700;font-size:14px;color:var(--ink);}
+.session-item .si-label{font-size:12px;color:var(--muted);font-family:var(--font-mono);}
+.si-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.si-tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#EEF2F6;color:var(--muted);}
+.si-tag.today{background:var(--accent);color:#3D2A05;}
+.si-tag.on{background:var(--primary);color:#fff;}
+.si-tag.off{background:transparent;border:1px dashed var(--border);}
+.si-tag.use{background:var(--ink);color:#fff;}
+.session-or{text-align:center;font-size:12px;color:var(--muted);margin:2px 0 8px;}
 .scan-mode-toggle{display:flex;gap:8px;margin-bottom:2px;}
 .mode-btn{
   flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
@@ -484,22 +508,21 @@ td.col-in,td.col-out{min-width:64px;}
       <section class="card">
         <p class="card-title"><span class="tick"></span>Session</p>
         <div class="session-fields">
+          <div class="field session-pick-field">
+            <label for="sessionPickBtn">Logging into</label>
+            <button type="button" class="session-pick-btn empty" id="sessionPickBtn">
+              <span class="spb-text">
+                <span class="spb-event" id="sessionPickEvent">No column picked yet</span>
+                <span class="spb-label" id="sessionPickLabel">Tap to pick one or start a new one</span>
+              </span>
+              <span class="spb-change">Change ▾</span>
+            </button>
+            <p class="help-text" id="sessionRoleText"></p>
+          </div>
           <div class="field">
-            <label for="fileNameInput">Export file name (event or date)</label>
-            <input type="text" id="fileNameInput" placeholder="e.g. Weekly Meeting 2026">
+            <label for="fileNameInput">Excel file name</label>
+            <input type="text" id="fileNameInput" placeholder="e.g. Intramurals Week 2026">
             <p class="help-text">Every group becomes its own tab inside this one Excel file.</p>
-          </div>
-          <div class="field">
-            <label for="sessionLabelInput">Column label for today's log</label>
-            <input type="text" id="sessionLabelInput">
-          </div>
-          <div class="field">
-            <label>Session period</label>
-            <div class="period-toggle" role="group" aria-label="Session period">
-              <button type="button" class="period-btn active" id="periodAmBtn" data-period="AM">AM</button>
-              <button type="button" class="period-btn" id="periodPmBtn" data-period="PM">PM</button>
-            </div>
-            <p class="help-text">Logs a separate AM and PM column per day, each with its own Time In / Time Out.</p>
           </div>
         </div>
       </section>
@@ -1210,6 +1233,22 @@ function buildSnapshot() {
   <div class="divider"></div>
 
   <div class="field">
+    <label>Column control</label>
+    <div class="checkbox-row">
+      <input type="checkbox" id="scannerModeCheckbox">
+      <label for="scannerModeCheckbox">Scanner mode</label>
+    </div>
+    <p class="help-text">For year-level representatives: this device can only log into columns the secretary already started &mdash; it can&rsquo;t start new ones or delete columns, so the Sheet stays tidy. Leave it off on the secretary&rsquo;s device.</p>
+    <div class="btn-row" style="margin-top:8px;align-items:center;">
+      <input type="password" inputmode="numeric" id="pinInput" placeholder="PIN (4&ndash;8 digits)" autocomplete="off" style="flex:1;min-width:120px;">
+      <button type="button" class="btn btn-ghost" id="pinSetBtn">Set PIN</button>
+      <button type="button" class="btn btn-ghost hidden" id="pinClearBtn">Remove</button>
+    </div>
+    <p class="help-text" id="pinStatus"></p>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
     <label>Backup &amp; restore</label>
     <p class="help-text">Save everything on this device to a file, or load one back &mdash; handy before clearing your browser or switching devices. Your Google Sheets link is left out unless you tick the box below.</p>
     <div class="checkbox-row" style="margin-top:10px;">
@@ -1318,6 +1357,48 @@ function buildSnapshot() {
   </div>
 </div>
 
+<!-- Pick which column to log into (or start a new one) -->
+<div class="modal-backdrop" id="sessionPickBackdrop">
+  <div class="modal">
+    <h3>Which column are you logging into?</h3>
+    <p class="sub" id="sessionPickSub"></p>
+    <div id="sessionPickMain">
+      <div class="session-list" id="sessionPickList"></div>
+      <p class="help-text hidden" id="sessionPickEmpty">No columns yet. The secretary starts the first one &mdash; then it shows up here to pick.</p>
+      <div class="session-or">or</div>
+      <button type="button" class="btn btn-ghost btn-block" id="sessionNewBtn">➕ Start a new column…</button>
+      <p class="help-text" id="sessionNewLocked"></p>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn btn-ghost hidden" id="sessionRefreshBtn" style="flex:1">↻ Refresh list</button>
+        <button type="button" class="btn btn-ghost" id="sessionPickCloseBtn" style="flex:1">Close</button>
+      </div>
+    </div>
+    <div id="sessionNewForm" class="hidden">
+      <div class="field">
+        <label for="newColEvent">Event name</label>
+        <input type="text" id="newColEvent" list="newColEventList" placeholder="e.g. Intramurals Day 1" autocomplete="off">
+        <datalist id="newColEventList"></datalist>
+      </div>
+      <div class="field">
+        <label for="newColDate">Date</label>
+        <input type="date" id="newColDate">
+      </div>
+      <div class="field">
+        <label>Period</label>
+        <div class="period-toggle" role="group" aria-label="Period">
+          <button type="button" class="period-btn active" id="newColAmBtn">AM</button>
+          <button type="button" class="period-btn" id="newColPmBtn">PM</button>
+        </div>
+      </div>
+      <p class="help-text" id="newColNote"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="newColBackBtn" style="flex:1">Back</button>
+        <button type="button" class="btn btn-primary" id="newColCreateBtn" style="flex:2">Create &amp; use</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Move a student to another group -->
 <div class="modal-backdrop" id="moveStudentBackdrop">
   <div class="modal">
@@ -1397,7 +1478,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'delete-single-column-2026-08-20';
+const BUILD_TAG = 'session-picker-2026-08-21';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 let isRestoring = false; // set while a backup is being restored, so no stray save can overwrite it
 
@@ -1655,6 +1736,7 @@ function applySheetsSnapshot(groups){
   reconcileSessions();
   saveState();
   if(needsSheetSync) syncColumnsToSheetsInBackground();
+  validateCurrentSession(); renderSessionControl();
 }
 
 async function connectSheets(){
@@ -1852,7 +1934,7 @@ function setAutoSync(enabled){
    first successful scan of a given date/mode — in ANY group, by ANYONE — adds
    that column, with its event name, to EVERY group. That way all groups always
    have the same set of events, so absence counts line up across groups. */
-function currentEventName(){ return ($('fileNameInput').value||'').trim() || 'Attendance'; }
+function currentEventName(){ return (state.currentSession && state.currentSession.eventName) || 'Attendance'; }
 
 function ensureSessionFields(g){
   if(!g.eventNames) g.eventNames = {};
@@ -2076,6 +2158,256 @@ function addOrUpdateStudent(id, name, markPresentForKey, mode){
   }
   saveState();
   return s;
+}
+
+/* ============================== Pick a column / Scanner mode ==============================
+   Columns (events) are shared by every group, so scanners should PICK one that already
+   exists instead of typing a name. Only a secretary device (Scanner mode off) can start
+   new columns, which keeps the Google Sheet tidy. */
+let pendingScanText = null; // a scan that arrived before a column was picked
+let removedSessionNotice = null; // the picked column that was deleted underneath us (shown once in the picker)
+let newColPeriod = 'AM';
+
+function isScannerMode(){ return !!settings.scannerMode; }
+function exportBaseName(){
+  return sanitizeFilename(($('fileNameInput').value || '').trim() || (state.currentSession && state.currentSession.eventName) || 'Attendance');
+}
+function todayInputValue(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDateLabel(dateStr){ // "2026-10-20" -> "Oct 20, 2026" (same style the old typed label used)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
+  if(!m) return '';
+  return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function isTodayLabel(label){ return String(label).startsWith(todayLabel() + ' ('); }
+
+// --- PIN: a casual guard so a representative can't just untick Scanner mode (not real security) ---
+function hashPin(pin){
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  const str = 'qra:' + String(pin);
+  for(let i = 0; i < str.length; i++){
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function pinIsSet(){ return !!settings.pinHash; }
+function askForPin(message){ // 'ok' | 'wrong' | 'cancel'
+  const v = prompt(message);
+  if(v === null) return 'cancel';
+  return hashPin(v.trim()) === settings.pinHash ? 'ok' : 'wrong';
+}
+function updatePinStatus(){
+  $('pinStatus').textContent = pinIsSet()
+    ? 'A PIN is set — it is needed to turn Scanner mode off, change the PIN, or remove it.'
+    : 'No PIN set — anyone can switch Scanner mode off in Settings.';
+  $('pinClearBtn').classList.toggle('hidden', !pinIsSet());
+}
+function onScannerModeToggle(e){
+  const wantOn = e.target.checked;
+  if(!wantOn && pinIsSet()){
+    const r = askForPin('Enter the secretary PIN to turn Scanner mode off');
+    if(r !== 'ok'){ e.target.checked = true; if(r === 'wrong') alert('That PIN is not right.'); return; }
+  }
+  settings.scannerMode = wantOn;
+  saveSettings();
+  refreshSessionControl();
+  showToast(wantOn ? 'Scanner mode on' : 'Secretary mode on');
+}
+function setPinFromInput(){
+  const v = $('pinInput').value.trim();
+  if(!/^\d{4,8}$/.test(v)){ alert('Use 4 to 8 digits for the PIN.'); return; }
+  if(pinIsSet()){
+    const r = askForPin('Enter the CURRENT PIN to change it');
+    if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
+  }
+  settings.pinHash = hashPin(v);
+  saveSettings();
+  $('pinInput').value = '';
+  updatePinStatus();
+  showToast('PIN saved');
+}
+function clearPin(){
+  if(!pinIsSet()) return;
+  const r = askForPin('Enter the current PIN to remove it');
+  if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
+  delete settings.pinHash;
+  saveSettings();
+  updatePinStatus();
+  showToast('PIN removed');
+}
+
+// --- the picked column ---
+// Forgets a column that no longer exists anywhere (e.g. the secretary deleted it).
+function validateCurrentSession(){
+  const cur = state.currentSession;
+  if(cur && cur.label && state.groupOrder.length > 0 && !computeSessionUnion().modes[cur.label]){
+    removedSessionNotice = { label: cur.label, eventName: cur.eventName };
+    state.currentSession = null;
+    saveState();
+  }
+}
+function renderSessionControl(){
+  const btn = $('sessionPickBtn'); if(!btn) return;
+  const c = state.currentSession;
+  btn.classList.toggle('empty', !c);
+  $('sessionPickEvent').textContent = c ? c.eventName : 'No column picked yet';
+  $('sessionPickLabel').textContent = c ? c.label : 'Tap to pick one or start a new one';
+  $('sessionRoleText').textContent = isScannerMode()
+    ? '🔒 Scanner mode — pick a column the secretary already started.'
+    : 'Secretary mode — you can start new columns.';
+  $('scannerModeCheckbox').checked = isScannerMode();
+  updateModalMarkPresentLabel();
+}
+function refreshSessionControl(){
+  validateCurrentSession();
+  renderSessionControl();
+  renderTable();
+}
+
+// Why a scan can't go ahead right now (or { ok:true }).
+function sessionStatus(){
+  const cur = state.currentSession;
+  if(!cur || !cur.label) return { ok:false, reason:'none' };
+  const known = computeSessionUnion().modes[cur.label];
+  if(!known && state.groupOrder.length > 0) return { ok:false, reason:'gone' };
+  if(!(known && known[scanMode])) return { ok:false, reason:'missing-mode' };
+  return { ok:true };
+}
+
+// Called before every scan. Opens the picker if no column is picked; stops scanners from
+// creating a missing Time In/Out column; asks the secretary before adding one.
+function ensureSessionReady(rawText){
+  const st = sessionStatus();
+  if(st.ok) return true;
+  const cur = state.currentSession;
+  if(st.reason === 'none' || st.reason === 'gone'){
+    if(st.reason === 'gone'){ state.currentSession = null; saveState(); renderSessionControl(); }
+    pendingScanText = rawText || null;
+    openSessionPicker(st.reason);
+    return false;
+  }
+  // The column exists, but not for this Time In / Time Out mode yet.
+  if(isScannerMode()){
+    beep(320,160); vibrate(120);
+    setResultBanner('unknown', '🔒', `No ${modeLabel(scanMode)} column yet`, `${cur.eventName} · ${cur.label} — ask the secretary to start it (then tap Refresh in Settings)`, { status:'ASK THE SECRETARY', statusKind:'bad' });
+    resetResultBannerSoon();
+    return false;
+  }
+  return confirm(`There's no ${modeLabel(scanMode)} column for "${cur.eventName} · ${cur.label}" yet.\n\nAdd it? It will be created in every group${sheetsConfigured() ? ' and every Sheet tab' : ''}.`);
+}
+
+// --- the picker dialog ---
+function openSessionPicker(reason){
+  modalOpen = true; // pause scanning while choosing
+  $('sessionPickBackdrop').classList.add('open');
+  showSessionList(removedSessionNotice ? 'gone' : reason);
+}
+function closeSessionPicker(){
+  $('sessionPickBackdrop').classList.remove('open');
+  modalOpen = false;
+  pendingScanText = null;
+}
+function showSessionList(reason){
+  $('sessionNewForm').classList.add('hidden');
+  $('sessionPickMain').classList.remove('hidden');
+  $('sessionPickSub').textContent = reason === 'gone'
+    ? (removedSessionNotice ? `"${removedSessionNotice.eventName} · ${removedSessionNotice.label}" was removed. Pick another column.` : 'That column was removed. Pick another one.')
+    : 'Pick the column your scans should go into, so everyone lines up in the same place.';
+  renderSessionList();
+}
+function renderSessionList(){
+  const { order, modes, names } = computeSessionUnion();
+  const list = $('sessionPickList'); list.innerHTML = '';
+  const items = order.slice().reverse().filter(l=>modes[l] && (modes[l].in || modes[l].out));
+  items.sort((a,b)=> (isTodayLabel(b) ? 1 : 0) - (isTodayLabel(a) ? 1 : 0)); // today's first
+  $('sessionPickEmpty').classList.toggle('hidden', items.length > 0);
+  items.forEach(label=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isCur = !!(state.currentSession && state.currentSession.label === label);
+    btn.className = 'session-item' + (isCur ? ' current' : '');
+    const ev = document.createElement('span'); ev.className = 'si-event'; ev.textContent = names[label] || 'Attendance';
+    const lb = document.createElement('span'); lb.className = 'si-label'; lb.textContent = label;
+    const tags = document.createElement('span'); tags.className = 'si-tags';
+    const tag = (text, cls)=>{ const t = document.createElement('span'); t.className = 'si-tag ' + cls; t.textContent = text; tags.appendChild(t); };
+    if(isTodayLabel(label)) tag('TODAY', 'today');
+    tag(modes[label].in ? 'Time In ✓' : 'Time In —', modes[label].in ? 'on' : 'off');
+    tag(modes[label].out ? 'Time Out ✓' : 'Time Out —', modes[label].out ? 'on' : 'off');
+    if(isCur) tag('IN USE', 'use');
+    btn.appendChild(ev); btn.appendChild(lb); btn.appendChild(tags);
+    btn.onclick = ()=> chooseSession(label);
+    list.appendChild(btn);
+  });
+  const canCreate = !isScannerMode();
+  $('sessionNewBtn').disabled = !canCreate;
+  $('sessionNewLocked').textContent = canCreate ? '' : '🔒 Scanner mode: only the secretary can start a new column.';
+  $('sessionRefreshBtn').classList.toggle('hidden', !sheetsConfigured());
+}
+function chooseSession(label){
+  const { names } = computeSessionUnion();
+  state.currentSession = { label, eventName: names[label] || 'Attendance' };
+  removedSessionNotice = null;
+  saveState();
+  const t = pendingScanText;
+  closeSessionPicker();
+  renderSessionControl();
+  renderTable();
+  showToast(`Logging into: ${state.currentSession.eventName} · ${label}`);
+  if(t) processScannedCode(t); // the scan that opened the picker goes through now
+}
+
+// --- starting a new column (secretary only) ---
+function setNewColPeriod(p){
+  newColPeriod = (p === 'PM') ? 'PM' : 'AM';
+  $('newColAmBtn').classList.toggle('active', newColPeriod === 'AM');
+  $('newColPmBtn').classList.toggle('active', newColPeriod === 'PM');
+}
+function showNewColumnForm(){
+  if(isScannerMode()) return;
+  $('sessionPickMain').classList.add('hidden');
+  $('sessionNewForm').classList.remove('hidden');
+  $('sessionPickSub').textContent = 'Start a new column for everyone to pick.';
+  const dl = $('newColEventList'); dl.innerHTML = '';
+  const { names } = computeSessionUnion();
+  Array.from(new Set(Object.values(names))).forEach(n=>{ const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
+  $('newColEvent').value = state.currentSession ? state.currentSession.eventName : '';
+  $('newColDate').value = todayInputValue();
+  setNewColPeriod(sessionPeriod);
+  $('newColNote').textContent = `This starts a ${modeLabel(scanMode)} column in every group. (Switch Time In / Time Out first if you want the other one.)`;
+  setTimeout(()=>$('newColEvent').focus(), 50);
+}
+function createNewColumnFromForm(){
+  if(isScannerMode()) return;
+  const eventName = $('newColEvent').value.trim();
+  if(!eventName){ alert('Type the event name first (for example "Intramurals Day 1").'); return; }
+  const dateLabel = formatDateLabel($('newColDate').value);
+  if(!dateLabel){ alert('Pick the date for this column.'); return; }
+  if(state.groupOrder.length === 0){ alert('Add or import a group first, then start the column.'); return; }
+  const label = `${dateLabel} (${newColPeriod})`;
+  const existing = computeSessionUnion();
+  if(existing.order.includes(label)){
+    alert(`A column for ${label} already exists ("${existing.names[label] || 'Attendance'}"). Pick it from the list instead of making a second one.`);
+    showSessionList();
+    return;
+  }
+  const isNew = registerSession(label, scanMode, eventName); // creates it in EVERY group
+  if(isNew) syncNewColumnToSheets(label, scanMode, eventName); // ...and every Sheet tab
+  sessionPeriod = newColPeriod; state.sessionPeriod = newColPeriod;
+  state.currentSession = { label, eventName };
+  removedSessionNotice = null;
+  saveState();
+  const t = pendingScanText;
+  closeSessionPicker();
+  renderSessionControl();
+  renderTable();
+  showToast(`New column started: ${eventName} · ${label}`);
+  if(t) processScannedCode(t);
 }
 
 /* ============================== Backup & restore ============================== */
@@ -2517,6 +2849,7 @@ function deleteColumn(label){
   });
   dropQueuedWritesFor(label, null);
   saveState();
+  validateCurrentSession(); renderSessionControl();
   renderTable();
 }
 
@@ -2540,6 +2873,7 @@ function deleteColumnMode(label, mode){
   });
   dropQueuedWritesFor(label, mode);
   saveState();
+  validateCurrentSession(); renderSessionControl();
   renderTable();
 }
 
@@ -2686,9 +3020,7 @@ let lastScan = { text:null, time:0 };
 let modalOpen = false;
 
 function getSessionLabel(){
-  const v = $('sessionLabelInput').value.trim();
-  const base = v || todayLabel();
-  return `${base} (${sessionPeriod})`;
+  return (state.currentSession && state.currentSession.label) || '';
 }
 
 function modeLabel(m){ return m === 'out' ? 'Time Out' : 'Time In'; }
@@ -2702,18 +3034,13 @@ function setScanMode(mode){
   updateModalMarkPresentLabel();
 }
 
-function setSessionPeriod(period){
-  sessionPeriod = (period === 'PM') ? 'PM' : 'AM';
-  state.sessionPeriod = sessionPeriod;
-  saveState();
-  $('periodAmBtn').classList.toggle('active', sessionPeriod === 'AM');
-  $('periodPmBtn').classList.toggle('active', sessionPeriod === 'PM');
-  renderTable();
-}
+
 
 function updateModalMarkPresentLabel(){
   const lbl = $('modalMarkPresentLabel');
-  if(lbl) lbl.textContent = `Mark ${modeLabel(scanMode)} for today's session`;
+  if(!lbl) return;
+  const c = state.currentSession;
+  lbl.textContent = c ? `Also log ${modeLabel(scanMode)} into: ${c.eventName} · ${c.label}` : 'No column picked yet — pick one at the top to log them too';
 }
 
 // Fills the big scan-result panel. `title` is the big line (the name), `sub` the small
@@ -2760,6 +3087,7 @@ function handleDecodedText(rawText){
 }
 
 async function processScannedCode(rawText){
+  if(!ensureSessionReady(rawText)) return; // pick / confirm a column first
   const id = extractId(rawText);
   const key = normalizeId(id);
   const sessionKey = getSessionLabel();
@@ -2806,7 +3134,7 @@ async function processScannedCode(rawText){
 // Sheets-synced — also fires the background sync to the real spreadsheet.
 // This is what makes Sheets sync work correctly even without a device lock.
 function logScanResult(group, groupName, student, sessionKey){
-  const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
+  const eventName = currentEventName();
   if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
   const rec = student.attendance[sessionKey];
 
@@ -3021,7 +3349,7 @@ function makeSubHeader(label, mode, otherModeExists){
     const keep = otherModeExists ? `\n\n${mode === 'out' ? 'Time In' : 'Time Out'} for this day is kept.` : '\n\nThis is the only column for that day, so the whole day is removed.';
     if(confirm(`Remove only the ${modeName} column for "${label}" from ALL groups?\n\nEvents are shared, so this deletes those ${modeName} times everywhere.${keep}`)) deleteColumnSynced(label, mode);
   };
-  th.appendChild(txt); th.appendChild(x);
+  th.appendChild(txt); if(!isScannerMode()) th.appendChild(x);
   return th;
 }
 
@@ -3064,7 +3392,7 @@ function renderTable(){
     const x = document.createElement('span'); x.className='date-th-x'; x.textContent='×';
     x.title = 'Remove this column';
     x.onclick = ()=>{ if(confirm(`Remove "${col}" from ALL groups? Events are shared, so this deletes those time records everywhere.`)) deleteColumnSynced(col); };
-    wrap.appendChild(txt); wrap.appendChild(x);
+    wrap.appendChild(txt); if(!isScannerMode()) wrap.appendChild(x);
     th.appendChild(wrap);
     headRow.appendChild(th);
 
@@ -3228,9 +3556,14 @@ async function confirmAddModal(){
 
   const existingGroup = state.groups[targetGroup];
   const isSheetsTarget = existingGroup && existingGroup.syncMode === 'sheets';
+  if($('modalMarkPresent').checked){
+    const st = sessionStatus();
+    if(st.reason === 'none' || st.reason === 'gone'){ alert('Pick which column to log them into first (tap "Logging into" at the top), or untick the box.'); return; }
+    if(st.reason === 'missing-mode' && isScannerMode()){ alert(`There's no ${modeLabel(scanMode)} column for this session yet — ask the secretary, or untick the box.`); return; }
+  }
   const sessionKey = $('modalMarkPresent').checked ? getSessionLabel() : null;
   const mode = scanMode;
-  const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
+  const eventName = currentEventName();
   const time = formatTime(new Date());
 
   if(isSheetsTarget){
@@ -3390,7 +3723,7 @@ function buildWorkbook(){
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ alert('Spreadsheet library failed to load. Check your internet connection and reload.'); return; }
   const blob = buildXLSXBlob();
-  downloadBlob(blob, sanitizeFilename($('fileNameInput').value) + '.xlsx');
+  downloadBlob(blob, exportBaseName() + '.xlsx');
 }
 function buildXLSXBlob(){
   const wb = buildWorkbook();
@@ -3516,19 +3849,14 @@ function init(){
   setAutoSync(!!settings.autoSync);
 
   $('fileNameInput').value = state.fileName || '';
-  $('sessionLabelInput').value = todayLabel();
 
   $('fileNameInput').addEventListener('input', ()=>{ state.fileName = $('fileNameInput').value; saveState(); });
-  $('sessionLabelInput').addEventListener('input', renderTable);
   $('searchInput').addEventListener('input', renderTable);
 
   $('modeInBtn').addEventListener('click', ()=> setScanMode('in'));
   $('modeOutBtn').addEventListener('click', ()=> setScanMode('out'));
   setScanMode(scanMode);
 
-  $('periodAmBtn').addEventListener('click', ()=> setSessionPeriod('AM'));
-  $('periodPmBtn').addEventListener('click', ()=> setSessionPeriod('PM'));
-  setSessionPeriod(sessionPeriod);
 
   $('startBtn').addEventListener('click', startScanning);
   $('stopBtn').addEventListener('click', stopScanning);
@@ -3660,11 +3988,25 @@ function init(){
       state = { fileName:'', scanMode: state.scanMode, sessionPeriod: state.sessionPeriod, groups:{}, groupOrder:[], activeGroupId:null };
       saveState();
       $('fileNameInput').value = '';
-      renderTable();
+      refreshSessionControl();
       showToast('All data cleared');
     }
   });
 
+  $('sessionPickBtn').addEventListener('click', ()=> openSessionPicker());
+  $('sessionPickCloseBtn').addEventListener('click', closeSessionPicker);
+  $('sessionPickBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='sessionPickBackdrop') closeSessionPicker(); });
+  $('sessionNewBtn').addEventListener('click', showNewColumnForm);
+  $('newColBackBtn').addEventListener('click', ()=> showSessionList());
+  $('newColAmBtn').addEventListener('click', ()=> setNewColPeriod('AM'));
+  $('newColPmBtn').addEventListener('click', ()=> setNewColPeriod('PM'));
+  $('newColCreateBtn').addEventListener('click', createNewColumnFromForm);
+  $('sessionRefreshBtn').addEventListener('click', async ()=>{ await refreshSheets(); renderSessionList(); });
+  $('scannerModeCheckbox').addEventListener('change', onScannerModeToggle);
+  $('pinSetBtn').addEventListener('click', setPinFromInput);
+  $('pinClearBtn').addEventListener('click', clearPin);
+  updatePinStatus();
+  refreshSessionControl();
   updateBackupInfo();
   try{
     if(sessionStorage.getItem('qrJustRestored')){ sessionStorage.removeItem('qrJustRestored'); showToast('Backup restored'); if((state.sheetsUrl||'').trim() && getSheetsGroups().length) refreshSheets(); }
@@ -3678,7 +4020,7 @@ async function shareViaAndroid(){
   try{
     const blob = buildXLSXBlob();
     const base64 = await blobToBase64(blob);
-    const filename = sanitizeFilename($('fileNameInput').value) + '.xlsx';
+    const filename = exportBaseName() + '.xlsx';
     AndroidHost.saveAndShareFile(base64, filename, blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }catch(e){
     console.error(e);
