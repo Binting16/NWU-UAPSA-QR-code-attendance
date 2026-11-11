@@ -1,101 +1,110 @@
 # NWU UAPSA QR Code Attendance
 
-A QR-code attendance scanner and roster manager that runs as a website — with **no backend server required**. Everything is scanned, logged, and exported straight from the browser, and all data stays on the device it's used on, unless you opt in to live Google Sheets sync.
+A modular, robust, and scalable QR-code attendance scanner and roster manager built for schools and student organizations. Runs as a high-performance static website on GitHub Pages with **zero backend servers required**. Everything is scanned, logged, and exported directly from the browser, with optional real-time two-way synchronization to Google Sheets.
 
-Built for schools/orgs that need to track attendance across multiple sections, classes, or teams at once — including with several people scanning simultaneously into a shared file.
-
----
-
-## Features
-
-### 📷 Scanning
-- Live camera-based QR scanning, with a camera picker if the device has more than one.
-- Manual entry fallback with a Submit button — type a Student ID by hand if a code won't scan.
-- The same field doubles as input for a USB barcode/QR scanner gun (types the code and submits automatically).
-- Audio + vibration feedback, with a color-coded result banner (success / duplicate / unrecognized).
-- Duplicate protection — re-scanning the same Time In/Out for someone tells you it's already logged instead of silently overwriting it.
-
-### 🗂️ Groups (multiple independent rosters)
-- Import as many separate rosters ("groups") as needed — one per section, class, or team.
-- **Multi-tab auto-import** — a spreadsheet with several worksheet tabs gets split into one correctly-named group per tab automatically.
-- **Choose your file's column layout on import**: Name+Student Number, Student Number+Name, Student Number+Last+First+Middle Initial, or Last+First+Middle Initial+Student Number. Split names are combined into the app's standard "Last, First M.I." format automatically.
-- Single-sheet imports ask for a group name (pre-filled from the file name), and can merge into an existing group instead of duplicating it.
-- Groups appear as tabs above the table; delete one with the **×** on its tab.
-- **Scanning auto-detects the right group** — searches every group for the ID and switches the visible tab to match, no manual switching needed.
-- Unrecognized IDs prompt you to add the student and pick (or create on the spot) a group.
-- **Global search** — searching isn't limited to whichever group's tab is open. If a match turns up in a *different* group, it shows up in an "Also found in other groups" list right under the search box; tap it to jump straight there with the search still applied.
-
-### ☁️ Google Sheets sync (optional, for multiple people scanning at once)
-- Connect the app to a shared Google Sheet via a small relay script (Apps Script) you deploy once — nobody scanning needs a Google account or to sign in. Full setup steps, including the complete script to copy, are built right into the app (Settings → the "How do I get this URL?" guide) — no separate document needed.
-- Every worksheet tab in that Sheet becomes a group, exactly like a multi-tab import — and it works both ways: scans write straight back into the real Sheet.
-- Cells in the live Sheet are color-coded to match the local Excel export (emerald headers, green Time In / red Time Out) the moment they're written.
-- **Scanning works with no group restriction by default** — auto-detects across every connected group, syncing correctly regardless. An explicit, off-by-default checkbox lets you *optionally* restrict one device to a single group, for cases with several people scanning into the same sheet at once and wanting to split the load.
-- Manual **Refresh** button, or automatic sync every 30 seconds.
-- Works offline-first: if the connection drops mid-scan, the entry logs locally instantly and queues for automatic retry once you're back online — nothing is lost, and failed syncs show a visible warning instead of failing silently.
-- Clearing a logged time (see below) also clears it on the real Sheet, not just locally.
-- Deleting a date column on a synced group deletes it from the real Sheet too; deleting a *group* from the app only stops tracking it on that device — it never touches the actual Sheet.
-
-### 🕐 Time tracking
-- Time In / Time Out toggle — pick which one the next scan records.
-- AM / PM session toggle — separate columns with their own Time In/Out for morning vs. afternoon.
-- **Only the column you actually use gets created.** Logging just a Time In for a session doesn't pre-create an empty Time Out column (or vice versa) — the second column only appears once you actually log that mode too. Applies to the table, the Excel export, and the live Google Sheet alike.
-- Manually add/rename/delete students, or delete a whole date column.
-- **Click any filled time cell to clear it** — with a confirmation popup showing exactly what's being removed, synced to Google Sheets automatically if that group is connected.
-- **Per-student Absent counter** — a dedicated column counts how many time cells are still empty for that student, flagged visibly once it's above zero. Updates live as you scan, and is included in the Excel export too.
-
-### 📤 Exporting
-- Excel (.xlsx) export — one workbook, one tab per group, color-coded Time In/Out cells, plus the Absent count per student.
-- **Per-date event title row** — each date's own columns are labeled with whatever "Export file name" was active when that date was recorded, so a sheet spanning multiple events shows the right name over each one.
-
-### 🎨 Display & customization
-- Custom app name, editable from Settings (updates the header live).
-- Name/Student ID column width presets (Compact/Normal/Wide) — free up space for date columns; long names truncate with a hover tooltip showing the full text.
-- Emerald green theme throughout the UI and exported Excel headers, plus a small credit line under the app title.
-
-### 💻 Layout
-- **Session** sits in its own row across the top; **Scanner** and **Attendance Log** sit side by side below it, with the log getting the larger share of the screen so the camera preview is never squeezed to make room for the table.
-- On wide screens (1440px+, covers 1920×1080), the whole page fits in one view with no page-level scrolling — the side panel and the table scroll independently within their own space if they ever need to.
-- Fully responsive down to phone-sized screens too, where everything just stacks normally.
-
-### 🔌 Runs anywhere, works offline
-- Open it as a plain website, or host it (e.g. GitHub Pages) for a fixed link anyone can use.
-- QR-scanning and Excel-export libraries are bundled locally instead of pulled from a CDN, so flaky WiFi or networks that block certain CDNs won't break it. If those local files are ever missing, it automatically falls back to loading them from a CDN instead of failing outright.
+Live Deployment: [https://binting16.github.io/](https://binting16.github.io/)
 
 ---
 
-## How to use it
+## Architecture Overview (v2.0 Modular Edition)
 
-[![Watch the video](https://img.youtube.com/vi/e8GSEoz8zQw/0.jpg)](https://youtu.be/e8GSEoz8zQw)
+The project has been modularized into standard W3C Web Components powered by **Lit 3** (~5 KB bundle) with client-side hash routing (`#/scanner`, `#/roster`, `#/events`, `#/admin`, `#/settings`).
 
-### 1. Import your first group
-Tap **Import**, pick a roster file, and choose its column layout if it's not the default Name/Student Number order.
-- Multiple worksheet tabs → confirm once, each tab becomes its own group automatically.
-- Single sheet → name the group (pre-filled from the file name).
-
-### 2. Set today's session
-In the **Session** row: type an event/export name, adjust the log's column label if needed (defaults to today's date), and pick **AM** or **PM**.
-
-### 3. Pick Time In or Time Out
-In the **Scanner** card, choose which one the next scans should record.
-
-### 4. Scan
-Tap **Start Scanning** and point the camera at a QR code — or type/scan an ID into the manual entry field. Recognized students get logged instantly, with the matching group tab popping into view automatically. Unrecognized IDs prompt you to add them.
-
-### 5. (Optional) Connect a shared Google Sheet
-Open **⚙ Settings**, expand **"How do I get this URL?"** under Google Sheets sync, and follow the steps to deploy the relay script (the full code is right there to copy). Paste the resulting URL and tap **Connect** — every tab in that Sheet becomes a group here.
-
-### 6. Check the log
-The **Attendance Log** table shows Name, Student ID, one In/Out pair per date column actually in use, and an **Absent** count per student. Search to jump to a specific student — matches from other groups show up separately and are one tap away. Tap any filled time cell to clear a mistake, or use the ✎ / 🗑 icons to manage entries.
-
-### 7. Export
-Tap **Excel** — one file, one tab per group, ready to send as-is.
+```
+NWU-UAPSA-QR-code-attendance/
+├── index.html                    # Lightweight HTML entry point (73 lines)
+├── README.md                     # Documentation & usage manual
+├── FUTURE_WORK.md                # Roadmap (Dark mode, Multi-college, Cloud DB)
+├── google-apps-script/
+│   └── Code.gs                   # Google Sheets Relay Backend (v2.0 with Auth & Config)
+├── src/
+│   ├── app-root.js               # Main Lit application shell
+│   ├── router.js                 # Hash-based router (#/scanner, #/roster, etc.)
+│   ├── config.js                 # Configuration constants & presets
+│   ├── state/
+│   │   └── store.js              # Central reactive observable store
+│   ├── services/
+│   │   ├── sheets-api.js         # Google Apps Script HTTP client
+│   │   ├── auth-service.js       # Role manager (Admin vs Scanner)
+│   │   ├── sync-queue.js         # Offline retry queue & auto-reconnect
+│   │   ├── audio-service.js      # Web Audio beeps & haptic vibration
+│   │   └── export-service.js     # Styled Excel (.xlsx) export engine
+│   ├── components/
+│   │   ├── ui-topbar.js          # Brand header, active event pill, sync badge
+│   │   ├── ui-navigation.js      # Responsive bottom/top navigation bar
+│   │   ├── ui-toast.js           # Ephemeral notification toasts
+│   │   └── ui-modal.js           # Accessible dialog backdrop
+│   ├── views/
+│   │   ├── view-scanner.js       # Live camera viewfinder & manual/USB scan
+│   │   ├── view-roster.js        # Matrix log, search, absent tallies, cell editor
+│   │   ├── view-events.js        # Standardized premade event & session picker
+│   │   ├── view-admin.js         # Secretary console, invite codes, roster import
+│   │   └── view-settings.js      # Sheets connection, layout options, backup
+│   └── styles/
+│       ├── theme.css             # Root CSS custom properties & typography
+│       └── shared-styles.js      # Reusable Lit component styles
+└── lib/                          # Vendored offline client libraries
+    ├── lit-core.min.js           # Lit 3 Core framework
+    ├── html5-qrcode.min.js       # Camera QR scanning engine
+    └── xlsx.bundle.js            # Styled Excel generation engine
+```
 
 ---
 
-## Data & privacy
+## Key Features
 
-Everything is stored locally (browser `localStorage`) by default — no server, no account required, and nothing leaves the device unless you explicitly export a file or opt in to Google Sheets sync. If you do connect a Sheet, only the groups you've connected sync anywhere; unconnected groups stay fully local. Clearing your browser data removes everything on that device, so export regularly if you need to keep records.
+### 1. 🛡️ Dual-Tier Role Authorization
+- **Secretary (Admin):** Full control over roster imports, event preset creation, column deletion, cell clearing, and invite code generation.
+- **Scanner (Representative):** High-throughput scanning and roster auditing. Scanners are restricted to logging into active premade events and cannot create or delete columns.
+- **Server Enforcement:** Google Apps Script relay (`Code.gs`) enforces permissions; unauthorized requests attempting to delete columns or tamper with rosters are rejected.
 
-## Tech stack
+### 2. 📅 Standardized Premade Events (Clean Columns)
+- Resolves messy column naming: Admins configure standardized event titles, dates, periods (AM/PM), and required modes (`Time In`, `Time Out`).
+- Scanners simply pick from the active event dropdown. The app automatically ensures uniform column headers across every group and spreadsheet tab.
 
-Single-file HTML/CSS/vanilla JavaScript — no build step, no framework. Uses [html5-qrcode](https://github.com/mebjas/html5-qrcode) for camera scanning and [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style) for styled Excel export. The optional Google Sheets sync runs on a small Google Apps Script relay you deploy yourself for free.
+### 3. 📱 Responsive Multi-Page Navigation
+- **Mobile (< 768px):** Fixed thumb-friendly bottom navigation bar, full-screen camera viewfinder, and high-visibility flash result panel.
+- **Desktop (≥ 768px):** Wide two-column workstation layout with zero page-level scrolling and sticky internal table headers.
+- **Hash-based Routing:** `#/scanner`, `#/roster`, `#/events`, `#/admin`, `#/settings` for 100% reliable GitHub Pages page reloads.
+
+### 4. ☁️ Google Sheets Two-Way Synchronization
+- Synchronizes with a shared Google Sheet via a serverless Google Apps Script relay.
+- Multi-device concurrent scanning with built-in script lock protection.
+- Offline-first: if internet connection drops mid-scan, records log locally instantly and automatically replay when connection restores.
+- Color-coded cells match exported Excel files (Emerald headers, Green Time In, Red Time Out).
+
+### 5. 📤 Styled Excel Export
+- One-click export to `.xlsx` with one worksheet tab per group.
+- Merged title banners for events spanning multiple sessions.
+- Dedicated per-student **Absent** counter.
+- Native Android bridge support (`AndroidBridge.saveAndShareFile`).
+
+---
+
+## Setup & Deployment Guide
+
+### Deploying to GitHub Pages
+1. Push this repository to GitHub.
+2. In your repository on GitHub: **Settings → Pages**.
+3. Under **Build and deployment → Branch**, choose `main` and root `/`.
+4. Your site will be live at `https://<username>.github.io/<repo-name>/`.
+
+### Connecting a Google Sheet
+1. Open or create a Google Sheet for your attendance.
+2. Click **Extensions → Apps Script**.
+3. Delete any default code, paste the entire contents of `google-apps-script/Code.gs`, and click **Save**.
+4. Click **Deploy → New deployment**.
+5. Select type **Web app**.
+   - **Execute as:** `Me`
+   - **Who has access:** `Anyone`
+6. Click **Deploy**, authorize permissions, and copy the **Web app URL** (ends in `/exec`).
+7. Open the web app → **Settings** → paste the URL into **Google Sheets Sync** → tap **Save Link**.
+
+---
+
+## Tech Stack
+- **Framework:** [Lit 3](https://lit.dev/) Web Components (ES Modules, zero-build setup).
+- **Scanning:** [html5-qrcode](https://github.com/mebjas/html5-qrcode).
+- **Spreadsheets:** [xlsx-js-style](https://github.com/gitbrent/xlsx-js-style).
+- **Backend Relay:** Google Apps Script.
+- **Hosting:** GitHub Pages.
