@@ -1,0 +1,87 @@
+:root {
+  --ink: #1A2332;
+  --muted: #5B6B82;
+  --bg: #EEF6F2;
+  --surface: #FFFFFF;
+  --surface-alt: #FBFCFE;
+  --border: #D5E5DC;
+  --border-strong: #A9C5B6;
+
+  /* Brand Emerald Palette */
+  --primary: #0B6E4F;
+  --primary-dark: #063D2B;
+  --primary-tint: #DFF3EA;
+  --primary-light: #22B573;
+  --accent: #E8A33D;
+  --accent-dark: #C5841F;
+  --accent-tint: #FFF8EA;
+
+  /* Semantic Feedback */
+  --success: #22B573;
+  --success-bg: #E1F7EC;
+  --success-ink: #0E7A4C;
+  --warn: #B8841A;
+  --warn-bg: #FCF1DA;
+  --danger: #C5413B;
+  --danger-bg: #FBE7E5;
+  --danger-border: #F0C5C2;
+
+  /* Typography */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, monospace;
+
+  /* Layout & Metrics */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 16px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+  --shadow-sm: 0 1px 3px rgba(15, 25, 40, 0.06);
+  --shadow-md: 0 4px 14px rgba(20, 30, 50, 0.08);
+  --shadow-lg: 0 10px 25px rgba(20, 30, 50, 0.12);
+
+  --name-col-width: 160px;
+  --id-col-width: 96px;
+  --action-bar-height: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input, select, button, textarea {
+  font-family: inherit;
+  font-size: 15px;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
