@@ -63,7 +63,7 @@ class Store {
           date: new Date().toISOString().split('T')[0],
           period: 'AM',
           requiredModes: 'in_out',
-          status: 'ACTIVE'
+          status: 'OPEN'
         }
       ],
       sheetsUrl: '',
@@ -176,9 +176,54 @@ class Store {
   }
 
   setCurrentSession(session) {
+    if (session) {
+      const preset = (this.state.eventPresets || []).find(p => p.id === session.eventId || (p.title === session.eventName && session.label && session.label.includes(p.period)));
+      if (preset && preset.status) {
+        session.status = preset.status;
+      }
+    }
     this.update(s => {
       s.currentSession = session;
     });
+  }
+
+  isSessionClosed(session) {
+    if (!session) return false;
+    if (session.status === 'CLOSED') return true;
+    const presets = this.state.eventPresets || [];
+    const p = presets.find(x => x.id === session.eventId || (x.title === session.eventName && session.label && session.label.includes(x.period)));
+    return !!(p && p.status === 'CLOSED');
+  }
+
+  toggleEventStatus(eventId) {
+    let newStatus = 'CLOSED';
+    this.update(s => {
+      const p = (s.eventPresets || []).find(x => x.id === eventId);
+      if (p) {
+        p.status = (p.status === 'CLOSED') ? 'OPEN' : 'CLOSED';
+        newStatus = p.status;
+        if (p.status === 'CLOSED') {
+          p.closedAt = new Date().toISOString();
+        } else {
+          delete p.closedAt;
+        }
+
+        if (s.currentSession && (s.currentSession.eventId === eventId || s.currentSession.eventName === p.title)) {
+          s.currentSession.status = newStatus;
+        }
+      }
+    });
+
+    if (this.state.sheetsUrl && authService.isAdmin()) {
+      sheetsApi.postAction(this.state.sheetsUrl, {
+        action: 'toggleEventStatus',
+        token: authService.getToken(),
+        eventId,
+        status: newStatus
+      }).catch(err => console.warn('Could not sync event status to sheet:', err));
+    }
+
+    return newStatus;
   }
 
   setEventPresets(presets) {
@@ -266,6 +311,17 @@ class Store {
     const sessionLabel = session.label;
     const eventName = session.eventName || 'Attendance';
     const mode = this.state.scanMode;
+
+    // Anti-cheating safeguard: verify if attendance for this session is closed
+    if (this.isSessionClosed(session)) {
+      return {
+        ok: false,
+        reason: 'event-closed',
+        id,
+        eventName: session.eventName,
+        sessionLabel: session.label
+      };
+    }
 
     // Check device group lock if configured
     if (this.state.lockedGroup) {
@@ -368,14 +424,18 @@ class Store {
     }
 
     if (markPresent && this.state.currentSession) {
-      const sessionLabel = this.state.currentSession.label;
-      const eventName = this.state.currentSession.eventName || 'Attendance';
-      const mode = this.state.scanMode;
-      const time = formatTime(new Date());
+      if (this.isSessionClosed(this.state.currentSession)) {
+        console.warn('Session is closed, student registered without timestamp');
+      } else {
+        const sessionLabel = this.state.currentSession.label;
+        const eventName = this.state.currentSession.eventName || 'Attendance';
+        const mode = this.state.scanMode;
+        const time = formatTime(new Date());
 
-      this.registerSessionColumn(sessionLabel, mode, eventName);
-      if (!s.attendance[sessionLabel]) s.attendance[sessionLabel] = { in: '', out: '' };
-      s.attendance[sessionLabel][mode] = time;
+        this.registerSessionColumn(sessionLabel, mode, eventName);
+        if (!s.attendance[sessionLabel]) s.attendance[sessionLabel] = { in: '', out: '' };
+        s.attendance[sessionLabel][mode] = time;
+      }
     }
 
     this.notify();

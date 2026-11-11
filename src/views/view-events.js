@@ -20,11 +20,13 @@ export class ViewEvents extends LitElement {
         border-radius: var(--radius, 16px);
         padding: 16px;
         background: var(--surface-alt, #FBFCFE);
-        cursor: pointer;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
         transition: all 0.15s ease;
       }
-      .session-card:hover {
+      .session-card:not(.card-closed) {
+        cursor: pointer;
+      }
+      .session-card:not(.card-closed):hover {
         border-color: var(--primary, #0B6E4F);
         transform: translateY(-1px);
       }
@@ -32,6 +34,12 @@ export class ViewEvents extends LitElement {
         border-color: var(--primary, #0B6E4F);
         background: var(--primary-tint, #DFF3EA);
         box-shadow: 0 4px 12px rgba(11, 110, 79, 0.12);
+      }
+
+      .session-card.card-closed {
+        border-color: #E2E8F0;
+        background: #F8FAFC;
+        opacity: 0.85;
       }
 
       .sc-header {
@@ -51,7 +59,18 @@ export class ViewEvents extends LitElement {
         font-family: var(--font-mono, monospace);
         font-size: 13px;
         color: var(--muted, #5B6B82);
-        margin: 0 0 8px;
+        margin: 0 0 10px;
+      }
+
+      .sc-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border, #D5E5DC);
+        flex-wrap: wrap;
       }
 
       .sc-tags {
@@ -75,6 +94,14 @@ export class ViewEvents extends LitElement {
         background: var(--accent-tint, #FFF8EA);
         color: var(--accent-dark, #C5841F);
       }
+      .tag.open-tag {
+        background: var(--success-bg, #E1F7EC);
+        color: var(--success-ink, #0E7A4C);
+      }
+      .tag.closed-tag {
+        background: var(--danger-bg, #FBE7E5);
+        color: var(--danger, #C5413B);
+      }
     `
   ];
 
@@ -97,6 +124,20 @@ export class ViewEvents extends LitElement {
     if (this.unsubscribe) this.unsubscribe();
   }
 
+  handleCardClick(preset) {
+    const isClosed = preset.status === 'CLOSED';
+    const isAdmin = authService.isAdmin();
+
+    if (isClosed && !isAdmin) {
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: '🔒 This session is closed by the secretary and no longer accepts attendance.' }
+      }));
+      return;
+    }
+
+    this.selectEvent(preset);
+  }
+
   selectEvent(preset) {
     const formattedDate = new Date(preset.date + 'T00:00:00').toLocaleDateString('en-US', {
       month: 'short',
@@ -108,7 +149,8 @@ export class ViewEvents extends LitElement {
     store.setCurrentSession({
       label,
       eventName: preset.title,
-      eventId: preset.id
+      eventId: preset.id,
+      status: preset.status || 'OPEN'
     });
 
     window.dispatchEvent(new CustomEvent('app-toast', {
@@ -116,6 +158,19 @@ export class ViewEvents extends LitElement {
     }));
 
     router.navigate('scanner');
+  }
+
+  toggleStatus(e, preset) {
+    e.stopPropagation();
+    const isClosed = preset.status === 'CLOSED';
+    const actionWord = isClosed ? 'Re-open' : 'Close';
+
+    if (confirm(`${actionWord} attendance for "${preset.title} (${preset.period})"?\n\n${isClosed ? 'Scanners will be able to log entries again.' : 'Scanners will be blocked from logging entries into this session to prevent cheating.'}`)) {
+      const newStatus = store.toggleEventStatus(preset.id);
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: { message: `Attendance for ${preset.title} is now ${newStatus}` }
+      }));
+    }
   }
 
   createNewEvent(e) {
@@ -141,7 +196,7 @@ export class ViewEvents extends LitElement {
       date,
       period,
       requiredModes,
-      status: 'ACTIVE'
+      status: 'OPEN'
     };
 
     store.addEventPreset(newPreset);
@@ -182,21 +237,47 @@ export class ViewEvents extends LitElement {
           });
           const label = `${formattedDate} (${p.period})`;
           const isCurrent = current && current.eventName === p.title && current.label === label;
+          const isClosed = p.status === 'CLOSED';
 
           return html`
             <div
-              class="session-card ${isCurrent ? 'active' : ''}"
-              @click="${() => this.selectEvent(p)}"
+              class="session-card ${isCurrent ? 'active' : ''} ${isClosed ? 'card-closed' : ''}"
+              @click="${() => this.handleCardClick(p)}"
             >
               <div class="sc-header">
                 <h4 class="sc-title">${p.title}</h4>
-                ${isCurrent ? html`<span class="tag active-tag">IN USE</span>` : ''}
+                <div style="display:flex; align-items:center; gap:6px;">
+                  ${isClosed ? html`
+                    <span class="tag closed-tag">🔒 CLOSED</span>
+                  ` : html`
+                    <span class="tag open-tag">🟢 OPEN</span>
+                  `}
+                  ${isCurrent ? html`<span class="tag active-tag">IN USE</span>` : ''}
+                </div>
               </div>
+
               <p class="sc-meta">📅 ${formattedDate} · ${p.period} Session</p>
+
               <div class="sc-tags">
                 <span class="tag period-tag">${p.period}</span>
                 <span class="tag">${p.requiredModes === 'in_out' ? 'Time In + Time Out' : p.requiredModes === 'in_only' ? 'Time In Only' : 'Time Out Only'}</span>
+                ${isClosed ? html`<span class="tag closed-tag">Attendance Locked</span>` : ''}
               </div>
+
+              <!-- Admin Controls: Open / Close Attendance Toggle -->
+              ${isAdmin ? html`
+                <div class="sc-footer">
+                  <span class="help-text" style="margin:0;">
+                    ${isClosed ? 'Locked: Scanners cannot enter records.' : 'Open: Accepting real-time scans.'}
+                  </span>
+                  <button
+                    class="btn ${isClosed ? 'btn-ghost' : 'btn-danger'} btn-sm"
+                    @click="${(e) => this.toggleStatus(e, p)}"
+                  >
+                    ${isClosed ? '🔓 Re-open Attendance' : '🔒 Close Attendance'}
+                  </button>
+                </div>
+              ` : ''}
             </div>
           `;
         })}

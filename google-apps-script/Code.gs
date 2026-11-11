@@ -47,6 +47,7 @@ function doPost(e) {
 
     // Privileged / Secretary Actions
     if (action === 'setEventPreset') return respond(setEventPresetAction(payload));
+    if (action === 'toggleEventStatus') return respond(toggleEventStatusAction(payload));
     if (action === 'deleteColumn') return respond(deleteColumnAction(payload));
     if (action === 'clearCell') return respond(clearCellAction(payload));
     if (action === 'addStudent') return respond(addStudentAction(payload));
@@ -135,8 +136,45 @@ function setInviteCodeAction(p) {
 function setEventPresetAction(p) {
   var configSheet = ensureConfigTab();
   var evt = p.event || {};
-  configSheet.appendRow([evt.id || ('EVT-' + Date.now()), evt.title, evt.date, evt.period, evt.requiredModes, 'ACTIVE']);
+  configSheet.appendRow([evt.id || ('EVT-' + Date.now()), evt.title, evt.date, evt.period, evt.requiredModes, evt.status || 'OPEN']);
   return { ok: true };
+}
+
+function toggleEventStatusAction(p) {
+  var configSheet = ensureConfigTab();
+  var lastRow = configSheet.getLastRow();
+  var targetId = String(p.eventId || '').trim();
+  var newStatus = String(p.status || 'CLOSED').trim().toUpperCase();
+
+  if (lastRow >= 2) {
+    var data = configSheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    for (var i = 0; i < data.length; i++) {
+      if (String(data[i][0]).trim() === targetId) {
+        configSheet.getRange(i + 2, 6).setValue(newStatus);
+        return { ok: true, status: newStatus };
+      }
+    }
+  }
+  return { ok: false, error: 'Event preset not found' };
+}
+
+function isEventSessionClosed(eventName, sessionLabel) {
+  var configSheet = ensureConfigTab();
+  var lastRow = configSheet.getLastRow();
+  if (lastRow < 2) return false;
+  var data = configSheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  var normTitle = String(eventName || '').trim().toLowerCase();
+  for (var i = 0; i < data.length; i++) {
+    var rowTitle = String(data[i][1] || '').trim().toLowerCase();
+    var period = String(data[i][3] || '').trim().toUpperCase();
+    var status = String(data[i][5] || '').trim().toUpperCase();
+    if (rowTitle === normTitle && status === 'CLOSED') {
+      if (!period || (sessionLabel && sessionLabel.indexOf(period) !== -1)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function getEventPresets() {
@@ -287,6 +325,11 @@ function locateCell(p) {
 }
 
 function logAttendanceAction(p) {
+  // Anti-cheating verification: Check if attendance for this session is closed
+  if (isEventSessionClosed(p.eventName, p.sessionLabel)) {
+    return { ok: false, error: 'Attendance for this session is closed.' };
+  }
+
   var loc = locateCell(p);
   if (loc.error) return { ok: false, error: loc.error };
 

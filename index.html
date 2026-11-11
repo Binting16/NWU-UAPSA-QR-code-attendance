@@ -25,41 +25,9 @@
   }
   </script>
 
-  <!-- Offline-First Libraries with Automatic CDN Fallback -->
-  <script>
-    (function() {
-      function loadScript(src) {
-        return new Promise(function(resolve, reject) {
-          const s = document.createElement('script');
-          s.src = src;
-          s.onload = function() { resolve(true); };
-          s.onerror = function() { reject(new Error('Failed to load ' + src)); };
-          document.head.appendChild(s);
-        });
-      }
-
-      function ensureLibrary(localSrc, cdnSrc, checkFn) {
-        return loadScript(localSrc)
-          .then(function() {
-            if (checkFn()) return true;
-            throw new Error('Local verification failed');
-          })
-          .catch(function() {
-            console.warn('Local asset (' + localSrc + ') failed, loading CDN fallback: ' + cdnSrc);
-            return loadScript(cdnSrc).then(checkFn).catch(function() { return false; });
-          });
-      }
-
-      window.__appLibsReady = Promise.all([
-        ensureLibrary('lib/html5-qrcode.min.js', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js', function() {
-          return typeof Html5Qrcode !== 'undefined';
-        }),
-        ensureLibrary('lib/xlsx.bundle.js', 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js', function() {
-          return typeof XLSX !== 'undefined';
-        })
-      ]);
-    })();
-  </script>
+  <!-- Synchronously Loaded Client Libraries with Auto CDN Fallback -->
+  <script src="./lib/html5-qrcode.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';"></script>
+  <script src="./lib/xlsx.bundle.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';"></script>
 
   <!-- Application Shell -->
   <script type="module" src="./src/app-root.js"></script>

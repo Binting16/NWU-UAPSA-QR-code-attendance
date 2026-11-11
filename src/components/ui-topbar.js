@@ -202,6 +202,7 @@ export class UiTopbar extends LitElement {
     const role = isAdmin ? 'Admin' : 'Scanner';
     const pendingCount = (state.pendingSync || []).length;
     const isSheetsConnected = !!(state.sheetsUrl || '').trim();
+    const isClosed = store.isSessionClosed(currentSession);
 
     return html`
       <header class="topbar">
@@ -222,9 +223,14 @@ export class UiTopbar extends LitElement {
 
         <div class="right-section">
           <!-- Active Event Pill -->
-          <div class="event-badge" title="Tap to switch event" @click="${() => router.navigate('events')}">
-            <span>📅</span>
-            <span>${eventDisplay}</span>
+          <div
+            class="event-badge"
+            style="${isClosed ? 'background:var(--danger-bg,#FBE7E5); color:var(--danger,#C5413B); border-color:#F0C5C2;' : ''}"
+            title="${isClosed ? 'Attendance is CLOSED for this event' : 'Tap to switch event'}"
+            @click="${() => router.navigate('events')}"
+          >
+            <span>${isClosed ? '🔒' : '📅'}</span>
+            <span>${eventDisplay} ${isClosed ? '(CLOSED)' : ''}</span>
           </div>
 
           <!-- Sync Indicator -->
