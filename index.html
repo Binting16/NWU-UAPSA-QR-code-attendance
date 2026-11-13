@@ -25,9 +25,24 @@
   }
   </script>
 
-  <!-- Synchronously Loaded Client Libraries with Auto CDN Fallback -->
-  <script src="./lib/html5-qrcode.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';"></script>
-  <script src="./lib/xlsx.bundle.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';"></script>
+  <!-- Client libraries: try local copy first, then CDN (changing a script's src in onerror does NOT reload it) -->
+  <script>
+    (function () {
+      function load(sources, done) {
+        var i = 0;
+        (function next() {
+          if (i >= sources.length) return done && done(false);
+          var s = document.createElement('script');
+          s.src = sources[i++];
+          s.onload = function () { done && done(true); };
+          s.onerror = function () { s.remove(); next(); };
+          document.head.appendChild(s);
+        })();
+      }
+      load(['./lib/html5-qrcode.min.js', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js', 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js']);
+      load(['./lib/xlsx.bundle.js', 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js']);
+    })();
+  </script>
 
   <!-- Application Shell -->
   <script type="module" src="./src/app-root.js"></script>

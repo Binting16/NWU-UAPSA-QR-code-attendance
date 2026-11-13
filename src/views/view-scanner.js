@@ -27,6 +27,7 @@ export class ViewScanner extends LitElement {
     this.cameras = [];
     this.selectedCamera = '';
     this.html5QrCode = null;
+    this.isStarting = false;
     this.lastScan = { text: null, time: 0 };
     this.addModalOpen = false;
     this.unknownId = '';
@@ -48,132 +49,165 @@ export class ViewScanner extends LitElement {
 
   async populateCameraList() {
     const Html5Qrcode = window.Html5Qrcode;
-    if (Html5Qrcode && Html5Qrcode.getCameras) {
-      try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          this.cameras = devices;
-          if (!this.selectedCamera) {
-            this.selectedCamera = devices[0].id;
-          }
-          this.requestUpdate();
+    if (!Html5Qrcode || !Html5Qrcode.getCameras) return;
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length > 0) {
+        this.cameras = devices;
+        // Only fall back to the first device if we don't know which one is running.
+        if (!this.selectedCamera) {
+          this.selectedCamera = devices[0].id;
         }
-      } catch (e) {
-        console.warn('Could not enumerate cameras:', e);
       }
+    } catch (e) {
+      console.warn('Could not enumerate cameras:', e);
     }
   }
 
+  // Fully release the camera and clear the html5-qrcode DOM so a fresh start is always clean
+  async teardownScanner() {
+    const scanner = this.html5QrCode;
+    this.html5QrCode = null;
+    if (!scanner) return;
+    try { await scanner.stop(); } catch (e) { /* not running */ }
+    try { await scanner.clear(); } catch (e) { /* nothing to clear */ }
+  }
+
+  _loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = src;
+      el.onload = resolve;
+      el.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(el);
+    });
+  }
+
+  async ensureLibrary() {
+    if (window.Html5Qrcode) return true;
+    const sources = [
+      './lib/html5-qrcode.min.js',
+      'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js',
+      'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js'
+    ];
+    for (const src of sources) {
+      try {
+        await this._loadScript(src);
+        if (window.Html5Qrcode) return true;
+      } catch (e) {
+        console.warn(e.message);
+      }
+    }
+    return false;
+  }
+
+  _errorText(err) {
+    return `${(err && err.name) || ''} ${(err && err.message) || ''} ${String(err)}`;
+  }
+
   async startScanner() {
+    if (this.isScanning || this.isStarting) return;
+
+    // The <script onerror> src-swap fallback in index.html can't reload a script, so load it here if needed
+    if (!(await this.ensureLibrary())) {
+      alert('Camera library failed to load. Check that ./lib/html5-qrcode.min.js exists, or check your internet connection, then reload.');
+      return;
+    }
     const Html5Qrcode = window.Html5Qrcode;
-    if (!Html5Qrcode) {
-      alert('Camera library failed to load. Please check your internet connection and reload the page.');
-      return;
-    }
 
-    const readerEl = document.getElementById('qr-reader');
-    if (!readerEl) {
-      console.error('DOM Element #qr-reader not found');
-      return;
-    }
-
-    // Check secure context
     if (!window.isSecureContext) {
       alert('Camera access requires HTTPS or localhost. Ensure the address begins with https://.');
       return;
     }
 
-    // Stop existing instance if any
-    if (this.html5QrCode) {
-      try {
-        await this.html5QrCode.stop();
-      } catch (e) {}
-    }
-
-    this.html5QrCode = new Html5Qrcode('qr-reader', { verbose: false });
-
-    // Dynamic responsive qrbox sizing function to prevent oversized qrbox crashes
-    const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
-      const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-      const edgeSize = Math.max(180, Math.floor(minEdge * 0.72));
-      return { width: edgeSize, height: edgeSize };
-    };
-
-    const cfg = {
-      fps: 10,
-      qrbox: qrboxFunction
-    };
-
-    // If a specific camera ID was selected by the user, use it
-    if (this.selectedCamera) {
-      try {
-        await this.html5QrCode.start(
-          { deviceId: { exact: this.selectedCamera } },
-          cfg,
-          (decodedText) => this.handleScan(decodedText),
-          () => {}
-        );
-        this.isScanning = true;
-        this.populateCameraList();
-        this.requestUpdate();
-        return;
-      } catch (err) {
-        console.warn('Starting selected camera failed, falling back to facingMode:', err);
-      }
-    }
-
-    // Mobile-first: attempt rear camera ('environment')
-    try {
-      await this.html5QrCode.start(
-        { facingMode: 'environment' },
-        cfg,
-        (decodedText) => this.handleScan(decodedText),
-        () => {}
-      );
-      this.isScanning = true;
-      this.populateCameraList();
-      this.requestUpdate();
+    // Use this.querySelector (Light DOM) instead of document.getElementById so we always get OUR element
+    const readerEl = this.querySelector('#qr-reader');
+    if (!readerEl) {
+      console.error('DOM Element #qr-reader not found');
       return;
-    } catch (errEnv) {
-      console.warn('Rear camera not available or failed (common on desktop/laptops):', errEnv);
+    }
 
-      // Desktop/Laptop fallback: attempt user-facing webcam
-      try {
-        await this.html5QrCode.start(
-          { facingMode: 'user' },
-          cfg,
-          (decodedText) => this.handleScan(decodedText),
-          () => {}
-        );
-        this.isScanning = true;
-        this.populateCameraList();
-        this.requestUpdate();
-        return;
-      } catch (errUser) {
-        console.error('All camera attempts failed:', errUser);
-        const name = (errUser && errUser.name) ? errUser.name : '';
-        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-          alert('Camera permission was denied. On mobile, check your browser site settings and allow camera access.');
-        } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-          alert('No camera was detected on this device.');
-        } else if (name === 'NotReadableError') {
-          alert('The camera is in use by another app or tab. Please close other camera apps and retry.');
-        } else {
-          alert(`Could not start camera: ${errUser.message || errUser}.`);
+    this.isStarting = true;
+    try {
+      await this.teardownScanner();
+
+      this.html5QrCode = new Html5Qrcode('qr-reader', {
+        verbose: false,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      });
+
+      const cfg = {
+        fps: 10,
+        // Square stream so the video matches the square viewfinder. Forcing a 4:3 / 16:9 stream into a
+        // square box with CSS makes html5-qrcode scan the WRONG region, so nothing ever decodes.
+        aspectRatio: 1.0,
+        qrbox: (w, h) => {
+          const edge = Math.max(150, Math.floor(Math.min(w, h) * 0.72));
+          return { width: Math.min(edge, w, h), height: Math.min(edge, w, h) };
+        }
+      };
+
+      // Try: user-selected camera -> rear camera -> front/webcam
+      const attempts = [];
+      if (this.selectedCamera) attempts.push({ deviceId: { exact: this.selectedCamera } });
+      attempts.push({ facingMode: 'environment' }, { facingMode: 'user' });
+
+      let lastErr = null;
+      let started = false;
+      for (const camera of attempts) {
+        try {
+          await this.html5QrCode.start(
+            camera,
+            cfg,
+            (decodedText) => this.handleScan(decodedText),
+            () => {}
+          );
+          started = true;
+          break;
+        } catch (err) {
+          lastErr = err;
+          console.warn('Camera attempt failed:', camera, err);
+          // No point trying other cameras if the user denied permission
+          if (/NotAllowed|PermissionDenied|Permission denied/i.test(this._errorText(err))) break;
         }
       }
+
+      if (!started) {
+        await this.teardownScanner();
+        const t = this._errorText(lastErr);
+        if (/NotAllowed|PermissionDenied|Permission denied/i.test(t)) {
+          alert('Camera permission was denied. On mobile, check your browser site settings and allow camera access.');
+        } else if (/NotFound|DevicesNotFound|Requested device not found/i.test(t)) {
+          alert('No camera was detected on this device.');
+        } else if (/NotReadable|TrackStart|Could not start video source/i.test(t)) {
+          alert('The camera is in use by another app or tab. Please close other camera apps and retry.');
+        } else {
+          alert(`Could not start camera: ${(lastErr && lastErr.message) || lastErr}`);
+        }
+        return;
+      }
+
+      this.isScanning = true;
+
+      // Remember which camera is ACTUALLY running so Stop -> Start doesn't jump to a different one
+      try {
+        const settings = this.html5QrCode.getRunningTrackSettings();
+        if (settings && settings.deviceId) this.selectedCamera = settings.deviceId;
+      } catch (e) {}
+
+      await this.populateCameraList();
+    } finally {
+      this.isStarting = false;
+      this.requestUpdate();
     }
   }
 
   async stopScanner() {
-    if (this.html5QrCode && this.isScanning) {
-      try {
-        await this.html5QrCode.stop();
-      } catch (e) {}
-      this.isScanning = false;
-      this.requestUpdate();
-    }
+    await this.teardownScanner();
+    this.isScanning = false;
+    this.requestUpdate();
   }
+
 
   async switchCamera() {
     if (!this.cameras || this.cameras.length < 2) return;
@@ -187,12 +221,18 @@ export class ViewScanner extends LitElement {
   }
 
   handleScan(rawText) {
+    const text = (rawText || '').trim();
+    if (!text) return;
+    // Ignore camera frames while the "add student" dialog is open
+    if (this.addModalOpen) return;
+
     const now = Date.now();
-    if (rawText === this.lastScan.text && now - this.lastScan.time < CONFIG.DUPLICATE_SCAN_COOLDOWN_MS) {
+    const cooldown = (CONFIG && CONFIG.DUPLICATE_SCAN_COOLDOWN_MS) || 2500;
+    if (text === this.lastScan.text && now - this.lastScan.time < cooldown) {
       return;
     }
-    this.lastScan = { text: rawText, time: now };
-    this.processScannedId(rawText);
+    this.lastScan = { text, time: now };
+    this.processScannedId(text);
   }
 
   processScannedId(rawText) {
@@ -223,6 +263,18 @@ export class ViewScanner extends LitElement {
           title: 'No Event Picked',
           meta: 'Tap the event pill at top to select an event first',
           status: 'NO EVENT'
+        };
+        return;
+      }
+
+      if (outcome.reason === 'locked-group-missing') {
+        audioService.playError();
+        this.resultBanner = {
+          kind: 'unknown',
+          icon: '⚠️',
+          title: 'Locked Group Missing',
+          meta: 'This device is locked to a group that no longer exists. Unlock it in settings.',
+          status: 'GROUP MISSING'
         };
         return;
       }
@@ -269,7 +321,7 @@ export class ViewScanner extends LitElement {
   }
 
   submitManual() {
-    const input = document.getElementById('manualInput');
+    const input = this.querySelector('#manualInput');
     if (!input) return;
     const val = input.value.trim();
     input.value = '';
@@ -286,15 +338,15 @@ export class ViewScanner extends LitElement {
 
   saveNewStudentModal(e) {
     e.preventDefault();
-    const idInput = document.getElementById('newStudentId');
-    const nameInput = document.getElementById('newStudentName');
-    const groupSelect = document.getElementById('newStudentGroup');
-    const markPresent = document.getElementById('newStudentMarkPresent');
+    // Read from the submitted form itself so it works even if <ui-modal> moves/wraps its content
+    const form = e.currentTarget || e.target;
+    const q = (sel) => form.querySelector(sel);
 
-    const id = (idInput && idInput.value) || '';
-    const name = (nameInput && nameInput.value) || '';
-    const group = (groupSelect && groupSelect.value) || '';
-    const shouldMark = markPresent ? markPresent.checked : true;
+    const id = ((q('#newStudentId') || {}).value || '').trim();
+    const name = ((q('#newStudentName') || {}).value || '').trim();
+    const group = (q('#newStudentGroup') || {}).value || '';
+    const markPresentEl = q('#newStudentMarkPresent');
+    const shouldMark = markPresentEl ? markPresentEl.checked : true;
 
     if (!id || !group) {
       alert('Student ID and Group are required.');
@@ -341,11 +393,12 @@ export class ViewScanner extends LitElement {
           width: 100%;
           height: 100%;
           position: relative;
+          border: none !important;
         }
+        /* Do NOT force width/height/object-fit on the video: html5-qrcode computes the scan
+           region from the video's real size, so overriding it breaks decoding. */
         #qr-reader video {
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
+          display: block;
         }
 
         .vf-placeholder {
