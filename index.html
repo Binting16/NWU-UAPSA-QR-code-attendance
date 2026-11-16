@@ -85,21 +85,22 @@ input,select,button,textarea{font-family:inherit;font-size:16px;}
      make room for it. */
   .lower-grid{
     display:grid;
-    grid-template-columns:380px 1fr;
+    grid-template-columns:clamp(340px,26%,440px) minmax(0,1fr);
     gap:16px;
     flex:1 1 auto;
     min-height:0;
+    min-width:0;
   }
   .col-left{display:flex;flex-direction:column;overflow-y:auto;min-height:0;}
-  .col-right{display:flex;flex-direction:column;min-height:0;}
+  .col-right{display:flex;flex-direction:column;min-height:0;min-width:0;}
   .col-left .card{margin-bottom:0;flex-shrink:0;padding:16px;height:100%;box-sizing:border-box;display:flex;flex-direction:column;}
-  .col-right .card{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;margin-bottom:0;}
+  .col-right .card{flex:1 1 auto;min-height:0;min-width:0;max-width:100%;display:flex;flex-direction:column;margin-bottom:0;}
   .col-right .card > *{flex-shrink:0;}
-  .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;max-height:none;}
+  .col-right .card > .table-wrap{flex:1 1 auto;min-height:0;min-width:0;max-width:100%;max-height:none;overflow:auto;}
 
   /* Scanner card content centers nicely in the taller column it now has to itself */
-  .col-left .viewfinder{max-width:300px;}
-  .col-left .result-banner{margin-top:auto;}
+  .col-left .viewfinder{max-width:360px;}
+  .col-right .scan-panel{flex-shrink:0;}
 }
 
 /* Extra breathing room on large monitors (e.g. 1920x1080 at 100% scale) --
@@ -179,7 +180,7 @@ header.topbar{
 .field{margin-bottom:10px;}
 .field:last-child{margin-bottom:0;}
 .field label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px;}
-.field input[type=text],.field input[type=date]{
+.field input[type=text],.field input[type=date],.field input[type=time],.field input[type=password]{
   width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:10px;
   background:#FBFCFE;color:var(--ink);
 }
@@ -235,6 +236,30 @@ header.topbar{
 }
 .period-btn.active{border-color:transparent;background:var(--primary);color:#fff;}
 .period-btn:active{transform:scale(0.97);}
+.session-pick-field{flex:2 !important;}
+.session-pick-btn{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+  text-align:left;padding:10px 14px;border-radius:12px;cursor:pointer;
+  border:2px solid var(--primary);background:var(--primary-tint);color:var(--ink);font-family:inherit;
+}
+.session-pick-btn.empty{border-style:dashed;border-color:var(--accent);background:#FFF8EA;}
+.spb-text{display:flex;flex-direction:column;min-width:0;}
+.spb-event{font-weight:800;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.spb-label{font-size:12.5px;color:var(--muted);font-family:var(--font-mono);}
+.spb-change{font-size:12px;font-weight:700;color:var(--primary);flex-shrink:0;}
+.session-list{max-height:min(46vh,340px);overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+.session-item{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#FBFCFE;cursor:pointer;font-family:inherit;}
+.session-item:hover{border-color:var(--primary);}
+.session-item.current{border:2px solid var(--primary);background:var(--primary-tint);}
+.session-item .si-event{font-weight:700;font-size:14px;color:var(--ink);}
+.session-item .si-label{font-size:12px;color:var(--muted);font-family:var(--font-mono);}
+.si-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px;}
+.si-tag{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#EEF2F6;color:var(--muted);}
+.si-tag.today{background:var(--accent);color:#3D2A05;}
+.si-tag.on{background:var(--primary);color:#fff;}
+.si-tag.off{background:transparent;border:1px dashed var(--border);}
+.si-tag.use{background:var(--ink);color:#fff;}
+.session-or{text-align:center;font-size:12px;color:var(--muted);margin:2px 0 8px;}
 .scan-mode-toggle{display:flex;gap:8px;margin-bottom:2px;}
 .mode-btn{
   flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
@@ -254,21 +279,45 @@ header.topbar{
   width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#FBFCFE;
 }
 
-/* result banner */
-.result-banner{
-  margin-top:14px;border-radius:14px;padding:14px;border:1.5px dashed var(--border);
-  display:flex;align-items:center;gap:12px;background:#FBFCFE;transition:all .15s ease;
+/* ---------- big scan result panel ---------- */
+.scan-panel{
+  display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:14px 18px;
+  border-radius:16px;border:2px dashed var(--border);background:#FBFCFE;
+  transition:background .15s ease,border-color .15s ease;
 }
-.result-banner .rb-icon{font-size:26px;line-height:1;width:34px;text-align:center;flex-shrink:0;}
-.result-banner .rb-text{min-width:0;}
-.result-banner .rb-title{font-weight:700;font-size:14px;margin:0 0 2px;}
-.result-banner .rb-sub{font-size:12px;color:var(--muted);font-family:var(--font-mono);margin:0;word-break:break-word;}
-.result-banner.success{border-style:solid;border-color:var(--success);background:var(--success-bg);}
-.result-banner.success .rb-title{color:var(--success-ink);}
-.result-banner.duplicate{border-style:solid;border-color:var(--accent);background:var(--warn-bg);}
-.result-banner.duplicate .rb-title{color:var(--warn);}
-.result-banner.unknown{border-style:solid;border-color:var(--danger);background:var(--danger-bg);}
-.result-banner.unknown .rb-title{color:var(--danger);}
+.scan-panel .sp-icon{font-size:38px;line-height:1;width:48px;text-align:center;flex-shrink:0;}
+.scan-panel .sp-main{flex:1 1 auto;min-width:0;}
+.scan-panel .sp-name{
+  margin:0;font-weight:800;font-size:clamp(22px,2.6vw,40px);line-height:1.12;letter-spacing:-.01em;
+  overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.scan-panel .sp-meta{margin:4px 0 0;font-size:14px;color:var(--muted);font-family:var(--font-mono);word-break:break-word;}
+.scan-panel .sp-meta:empty{display:none;}
+.scan-panel .sp-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+.sp-chip{
+  display:inline-block;padding:6px 14px;border-radius:999px;font-weight:800;white-space:nowrap;
+  font-size:clamp(13px,1.2vw,17px);background:#fff;border:1px solid var(--border);color:var(--ink);
+}
+.sp-chip.in{background:var(--primary);border-color:var(--primary);color:#fff;}
+.sp-chip.out{background:var(--danger);border-color:var(--danger);color:#fff;}
+.sp-chip.dup{background:var(--accent);border-color:var(--accent);color:#3D2A05;}
+.sp-chip.bad{background:var(--danger);border-color:var(--danger);color:#fff;}
+.sp-chip.sp-absent{background:transparent;border:none;padding:0;font-size:14px;font-weight:700;color:var(--muted);}
+.sp-chip.sp-absent.has-absences{color:var(--danger);}
+.scan-panel.success{border-style:solid;border-color:var(--success);background:var(--success-bg);}
+.scan-panel.success .sp-name{color:var(--success-ink);}
+.scan-panel.duplicate{border-style:solid;border-color:var(--accent);background:var(--warn-bg);}
+.scan-panel.duplicate .sp-name{color:var(--warn);}
+.scan-panel.unknown{border-style:solid;border-color:var(--danger);background:var(--danger-bg);}
+.scan-panel.unknown .sp-name{color:var(--danger);}
+/* Nothing scanned yet: shrink to a slim bar so the log keeps its height */
+.scan-panel:not(.success):not(.duplicate):not(.unknown){padding:10px 16px;}
+.scan-panel:not(.success):not(.duplicate):not(.unknown) .sp-icon{font-size:22px;width:28px;}
+.scan-panel:not(.success):not(.duplicate):not(.unknown) .sp-name{font-size:16px;font-weight:700;color:var(--muted);}
+@media(max-width:560px){
+  .scan-panel{flex-wrap:wrap;}
+  .scan-panel .sp-side{flex-direction:row;align-items:center;width:100%;justify-content:space-between;}
+}
 
 /* ---------- Table ---------- */
 .summary-line{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap;}
@@ -336,6 +385,8 @@ thead tr.subhead th{
 th.sub-in,th.sub-out{min-width:64px;}
 td.col-in,td.col-out{min-width:64px;}
 .date-th-x{cursor:pointer;opacity:.7;font-weight:700;}
+.sub-th-x{cursor:pointer;opacity:.6;font-weight:700;margin-left:5px;padding:0 3px;}
+.sub-th-x:hover{opacity:1;}
 .empty-state{padding:26px 14px;text-align:center;color:var(--muted);font-size:13.5px;}
 
 /* ---------- Bottom action bar ---------- */
@@ -457,22 +508,21 @@ td.col-in,td.col-out{min-width:64px;}
       <section class="card">
         <p class="card-title"><span class="tick"></span>Session</p>
         <div class="session-fields">
+          <div class="field session-pick-field">
+            <label for="sessionPickBtn">Logging into</label>
+            <button type="button" class="session-pick-btn empty" id="sessionPickBtn">
+              <span class="spb-text">
+                <span class="spb-event" id="sessionPickEvent">No column picked yet</span>
+                <span class="spb-label" id="sessionPickLabel">Tap to pick one or start a new one</span>
+              </span>
+              <span class="spb-change">Change ▾</span>
+            </button>
+            <p class="help-text" id="sessionRoleText"></p>
+          </div>
           <div class="field">
-            <label for="fileNameInput">Export file name (event or date)</label>
-            <input type="text" id="fileNameInput" placeholder="e.g. Weekly Meeting 2026">
+            <label for="fileNameInput">Excel file name</label>
+            <input type="text" id="fileNameInput" placeholder="e.g. Intramurals Week 2026">
             <p class="help-text">Every group becomes its own tab inside this one Excel file.</p>
-          </div>
-          <div class="field">
-            <label for="sessionLabelInput">Column label for today's log</label>
-            <input type="text" id="sessionLabelInput">
-          </div>
-          <div class="field">
-            <label>Session period</label>
-            <div class="period-toggle" role="group" aria-label="Session period">
-              <button type="button" class="period-btn active" id="periodAmBtn" data-period="AM">AM</button>
-              <button type="button" class="period-btn" id="periodPmBtn" data-period="PM">PM</button>
-            </div>
-            <p class="help-text">Logs a separate AM and PM column per day, each with its own Time In / Time Out.</p>
           </div>
         </div>
       </section>
@@ -515,18 +565,23 @@ td.col-in,td.col-out{min-width:64px;}
             <button type="button" class="btn btn-primary" id="manualSubmitBtn">Submit</button>
           </div>
         </div>
-
-        <div class="result-banner" id="resultBanner">
-          <div class="rb-icon" id="rbIcon">📷</div>
-          <div class="rb-text">
-            <p class="rb-title" id="rbTitle">Ready to scan</p>
-            <p class="rb-sub" id="rbSub">Logged entries will appear in the table below</p>
-          </div>
-        </div>
         </section>
       </div>
 
       <div class="col-right">
+        <!-- Big scan result: the name of whoever just scanned -->
+        <div class="scan-panel" id="resultBanner" aria-live="polite">
+          <div class="sp-icon" id="rbIcon">📷</div>
+          <div class="sp-main">
+            <p class="sp-name" id="rbTitle">Ready to scan</p>
+            <p class="sp-meta" id="rbSub"></p>
+          </div>
+          <div class="sp-side">
+            <span class="sp-chip hidden" id="rbStatus"></span>
+            <span class="sp-chip sp-absent hidden" id="rbAbsent"></span>
+          </div>
+        </div>
+
         <!-- Roster / Log -->
         <section class="card">
           <p class="card-title"><span class="tick"></span>Attendance Log</p>
@@ -612,15 +667,31 @@ td.col-in,td.col-out{min-width:64px;}
  *      Settings → &quot;Google Sheets sync&quot; field.
  *
  * Sheet layout this expects (matches the app&#x27;s own Excel export exactly):
- *   Row 1: title cells (event name, merged per date-pair, blank over Name/ID)
- *   Row 2: headers — Name, Student ID, then &quot;&lt;date&gt; - Time In&quot; / &quot;&lt;date&gt; - Time Out&quot; pairs
+ *   Row 1: title cells (event name, one per date column)
+ *   Row 2: headers — Name, Student ID, then &quot;&lt;date&gt; - Time In&quot; and/or
+ *          &quot;&lt;date&gt; - Time Out&quot; columns
  *   Row 3+: one row per student
+ *
+ * A date only gets the ONE column for whichever mode (Time In or Time Out)
+ * has actually been scanned — nothing is created ahead of time. If you
+ * later also use the other mode for that same date, its column gets added
+ * then, not before.
+ *
+ * Every tab always has the SAME set of date columns: the first scan of a
+ * date/mode in ANY tab, by anyone, adds that column (with its event name) to
+ * ALL tabs. Side-by-side columns with the same event name share ONE merged
+ * title cell. That keeps the number of events equal across groups, so absence
+ * counts are comparable. Deleting a date column removes it from every tab.
  *
  * Each worksheet TAB in the spreadsheet is treated as one &quot;group&quot; in the app.
  * Add a new tab in Sheets (with at least &quot;Name&quot;/&quot;Student ID&quot; in row 2, or
  * just leave it blank — the relay fills that in) and hit &quot;Refresh&quot; in the
  * app to pick it up. Deleting a group in the app does NOT delete the sheet
  * tab — it only stops tracking it on that device.
+ *
+ * UPDATING THIS SCRIPT LATER: after pasting a new version, you must do
+ * Deploy → Manage deployments → (pencil icon) → Version: New version →
+ * Deploy. Saving alone does not change the live URL.
  */
 
 function doGet(e) {
@@ -644,6 +715,11 @@ function doPost(e) {
     if (action === &#x27;deleteColumn&#x27;) return respond(deleteColumnAction(payload));
     if (action === &#x27;addStudent&#x27;) return respond(addStudentAction(payload));
     if (action === &#x27;clearCell&#x27;) return respond(clearCellAction(payload));
+    if (action === &#x27;ensureColumn&#x27;) return respond(ensureColumnAction(payload));
+    if (action === &#x27;syncColumns&#x27;) return respond(syncColumnsAction(payload));
+    if (action === &#x27;setCell&#x27;) return respond(setCellAction(payload));
+    if (action === &#x27;deleteStudent&#x27;) return respond(deleteStudentAction(payload));
+    if (action === &#x27;moveStudent&#x27;) return respond(moveStudentAction(payload));
     return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
   } catch (err) {
     return respond({ ok: false, error: String(err) });
@@ -661,13 +737,6 @@ function getSS() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
-function formatAttendanceTime(value) {
-  if (value instanceof Date) {
-    return Utilities.formatDate(value, getSS().getSpreadsheetTimeZone(), 'h:mm a');
-  }
-  return value || '';
-}
-
 /* ---------- Colors (matches the app&#x27;s local Excel export exactly) ---------- */
 var COLOR_PRIMARY      = &#x27;#0B6E4F&#x27;; // header row background, title text
 var COLOR_PRIMARY_TINT = &#x27;#DFF3EA&#x27;; // title row background
@@ -676,6 +745,32 @@ var COLOR_PRESENT_BG    = &#x27;#C6EFCE&#x27;; // Time In cell background
 var COLOR_PRESENT_FG    = &#x27;#006100&#x27;; // Time In text
 var COLOR_OUT_BG        = &#x27;#FBE7E5&#x27;; // Time Out cell background
 var COLOR_OUT_FG        = &#x27;#C5413B&#x27;; // Time Out text
+
+/* ---------- Time text helpers ----------
+   Google Sheets likes to &quot;helpfully&quot; turn typed text such as 5:28 PM into a
+   real Time value. The API then hands that cell back as a Date anchored to
+   1899-12-30 (the odd &quot;1899-12-30T17:28:00.000Z&quot; text). To avoid that we
+   (1) write times and IDs as plain text, and (2) always read cells back as
+   their displayed text, turning anything that was already converted back
+   into the app&#x27;s own &quot;h:mm AM/PM&quot; style. */
+function normalizeTimeText(value) {
+  var s = String(value === null || value === undefined ? &#x27;&#x27; : value).trim();
+  if (!s) return &#x27;&#x27;;
+  s = s.replace(/^\d{1,2}\/\d{1,2}\/1899\s+/, &#x27;&#x27;); // strip a leftover epoch date, if shown
+  // &quot;5:28:00 PM&quot; (how Sheets shows a converted time) -&gt; &quot;5:28 PM&quot;
+  var m12 = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])$/);
+  if (m12) return parseInt(m12[1], 10) + &#x27;:&#x27; + m12[2] + &#x27; &#x27; + m12[3].toUpperCase();
+  // 24-hour display &quot;17:28:00&quot; / &quot;17:28&quot; -&gt; &quot;5:28 PM&quot;
+  var m24 = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (m24) {
+    var h = parseInt(m24[1], 10);
+    var ap = h &gt;= 12 ? &#x27;PM&#x27; : &#x27;AM&#x27;;
+    var h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return h12 + &#x27;:&#x27; + m24[2] + &#x27; &#x27; + ap;
+  }
+  return s;
+}
 
 /* ---------- Sheet layout helpers ---------- */
 
@@ -697,7 +792,7 @@ function ensureHeaderRows(sheet) {
 
 function getHeaderRow(sheet) {
   var lastCol = Math.max(sheet.getLastColumn(), 2);
-  return sheet.getRange(2, 1, 1, lastCol).getValues()[0];
+  return sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
 }
 
 function findDateColIndex(headerRow, sessionLabel, suffix) {
@@ -708,43 +803,119 @@ function findDateColIndex(headerRow, sessionLabel, suffix) {
   return -1;
 }
 
-// Returns the 1-indexed column of &quot;&lt;sessionLabel&gt; - Time In&quot; (Time Out is
-// always the column right after it), creating both columns + the title
-// banner cell above them if this date hasn&#x27;t been logged yet.
-function ensureDateColumns(sheet, sessionLabel, eventName) {
-  ensureHeaderRows(sheet);
-  var headerRow = getHeaderRow(sheet);
-  var inCol = findDateColIndex(headerRow, sessionLabel, &#x27;Time In&#x27;);
-  if (inCol !== -1) return inCol;
+// Returns the 1-indexed column for &quot;&lt;sessionLabel&gt; - Time In&quot; or
+// &quot;&lt;sessionLabel&gt; - Time Out&quot; (whichever `mode` asks for), creating just
+// that ONE column — plus its own title cell above it — if it doesn&#x27;t exist
+// yet. The other mode&#x27;s column for this same date is only created later,
+// if and when it&#x27;s actually used; nothing is set up ahead of time.
+/* ---------- Event title banners ----------
+   Side-by-side date columns that share the same event name get ONE merged
+   title cell (e.g. &quot;Intramurals Day 1&quot; across AM + PM, Time In + Time Out).
+   In Sheets only the first cell of a merged range holds the text, so every
+   read of row 1 goes through readTitles(), which copies it across the
+   merged cells. */
+function normalizeTitle(t) {
+  return String(t === null || t === undefined ? &#x27;&#x27; : t).trim().toLowerCase();
+}
 
+function readTitles(sheet, lastCol) {
+  var range = sheet.getRange(1, 1, 1, lastCol);
+  var titles = range.getDisplayValues()[0];
+  range.getMergedRanges().forEach(function (m) {
+    if (m.getRow() !== 1) return;
+    var first = m.getColumn() - 1; // 0-indexed
+    var text = titles[first];
+    for (var i = 0; i &lt; m.getNumColumns(); i++) {
+      if (first + i &lt; titles.length) titles[first + i] = text;
+    }
+  });
+  return titles;
+}
+
+function styleTitleRange(range) {
+  range.setBackground(COLOR_PRIMARY_TINT)
+    .setFontColor(COLOR_PRIMARY)
+    .setFontWeight(&#x27;bold&#x27;)
+    .setHorizontalAlignment(&#x27;center&#x27;)
+    .setVerticalAlignment(&#x27;middle&#x27;);
+}
+
+// Un-merges the date part of the title row and writes each column&#x27;s own
+// event name back into its cell. Returns the names (index 0 = column A).
+function explodeEventTitles(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol &lt; 3) return [];
+  var titles = readTitles(sheet, lastCol);
+  var dateRange = sheet.getRange(1, 3, 1, lastCol - 2);
+  dateRange.breakApart();
+  dateRange.setNumberFormat(&#x27;@&#x27;).setValues([titles.slice(2)]);
+  styleTitleRange(dateRange);
+  return titles;
+}
+
+// Re-merges every run of adjacent date columns that share an event name.
+function mergeEventTitles(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol &lt; 3) return;
+  var titles = explodeEventTitles(sheet);
+  var c = 3; // first date column (1-indexed)
+  while (c &lt;= lastCol) {
+    var key = normalizeTitle(titles[c - 1]);
+    var end = c;
+    while (key !== &#x27;&#x27; &amp;&amp; end + 1 &lt;= lastCol &amp;&amp; normalizeTitle(titles[end]) === key) end++;
+    if (end &gt; c) sheet.getRange(1, c, 1, end - c + 1).merge();
+    c = end + 1;
+  }
+}
+
+function createDateColumn(sheet, sessionLabel, mode, eventName) {
+  ensureHeaderRows(sheet);
+  var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
   var newCol = sheet.getLastColumn() + 1;
   if (newCol &lt; 3) newCol = 3;
 
-  sheet.getRange(2, newCol, 1, 2).setValues([[sessionLabel + &#x27; - Time In&#x27;, sessionLabel + &#x27; - Time Out&#x27;]])
+  sheet.getRange(2, newCol).setNumberFormat(&#x27;@&#x27;).setValue(sessionLabel + &#x27; - &#x27; + suffix)
     .setBackground(COLOR_PRIMARY)
     .setFontColor(COLOR_WHITE)
     .setFontWeight(&#x27;bold&#x27;)
     .setHorizontalAlignment(&#x27;center&#x27;)
     .setVerticalAlignment(&#x27;middle&#x27;);
   sheet.setColumnWidth(newCol, 90);
-  sheet.setColumnWidth(newCol + 1, 90);
 
-  var titleRange = sheet.getRange(1, newCol, 1, 2);
-  titleRange.setValues([[eventName || &#x27;Attendance&#x27;, &#x27;&#x27;]])
+  sheet.getRange(1, newCol).setNumberFormat(&#x27;@&#x27;).setValue(eventName || &#x27;Attendance&#x27;)
     .setBackground(COLOR_PRIMARY_TINT)
     .setFontColor(COLOR_PRIMARY)
     .setFontWeight(&#x27;bold&#x27;)
     .setHorizontalAlignment(&#x27;center&#x27;)
     .setVerticalAlignment(&#x27;middle&#x27;);
-  try { titleRange.merge(); } catch (mergeErr) { /* fine if it can&#x27;t merge */ }
 
   return newCol;
+}
+
+// Returns { col, created } for the &quot;&lt;sessionLabel&gt; - Time In/Out&quot; column,
+// creating just that ONE column if this tab doesn&#x27;t have it yet. The other
+// mode&#x27;s column is only created later, if and when it&#x27;s actually used.
+function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
+  ensureHeaderRows(sheet);
+  var suffix = (mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
+  var existingCol = findDateColIndex(getHeaderRow(sheet), sessionLabel, suffix);
+  if (existingCol !== -1) return { col: existingCol, created: false };
+  var newCol = createDateColumn(sheet, sessionLabel, mode, eventName);
+  mergeEventTitles(sheet); // same event name as the neighbouring column(s) -&gt; one banner
+  return { col: newCol, created: true };
+}
+
+// Gives EVERY tab this date/mode column (no-op for tabs that already have it).
+function ensureColumnInAllTabs(sessionLabel, mode, eventName) {
+  getSS().getSheets().forEach(function (sheet) {
+    ensureDateColumn(sheet, sessionLabel, mode, eventName);
+  });
 }
 
 function findStudentRow(sheet, studentId) {
   var lastRow = sheet.getLastRow();
   if (lastRow &lt; 3) return -1;
-  var ids = sheet.getRange(3, 2, lastRow - 2, 1).getValues();
+  var ids = sheet.getRange(3, 2, lastRow - 2, 1).getDisplayValues();
   for (var i = 0; i &lt; ids.length; i++) {
     if (String(ids[i][0]).trim() === String(studentId).trim()) return i + 3;
   }
@@ -753,34 +924,75 @@ function findStudentRow(sheet, studentId) {
 
 /* ---------- Actions ---------- */
 
-function logAttendance(p) {
+// Finds (creating if needed) the column for this date/mode and the student&#x27;s
+// row. Shared by scanning and by manual edits.
+function locateCell(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet) return { error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
 
-  var col = ensureDateColumns(sheet, p.sessionLabel, p.eventName);
-  var targetCol = (p.mode === &#x27;out&#x27;) ? col + 1 : col;
+  var colInfo = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
+  if (colInfo.created) {
+    // First time this date/mode is used: every other tab gets the same column,
+    // so all groups end up with the same set of events.
+    getSS().getSheets().forEach(function (other) {
+      if (other.getName() !== sheet.getName()) {
+        ensureDateColumn(other, p.sessionLabel, p.mode, p.eventName);
+      }
+    });
+  }
 
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) {
     row = Math.max(sheet.getLastRow() + 1, 3);
     sheet.getRange(row, 1).setValue(p.studentName || &#x27;&#x27;);
-    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+    sheet.getRange(row, 2).setNumberFormat(&#x27;@&#x27;).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
+  return { sheet: sheet, row: row, col: colInfo.col };
+}
 
-  var cell = sheet.getRange(row, targetCol);
-  var existing = cell.getValue();
-  if (existing) {
-    return { ok: true, duplicate: true, existing: formatAttendanceTime(existing) };
-  }
-  cell.setValue(p.time).setNumberFormat(&#x27;h:mm AM/PM&#x27;).setHorizontalAlignment(&#x27;center&#x27;);
-  if (p.mode === &#x27;out&#x27;) {
+// Plain-text format FIRST, so Sheets keeps &quot;5:28 PM&quot; as text instead of
+// converting it into a Time value.
+function writeTime(cell, mode, time) {
+  cell.setNumberFormat(&#x27;@&#x27;).setValue(time).setHorizontalAlignment(&#x27;center&#x27;);
+  if (mode === &#x27;out&#x27;) {
     cell.setBackground(COLOR_OUT_BG).setFontColor(COLOR_OUT_FG);
   } else {
     cell.setBackground(COLOR_PRESENT_BG).setFontColor(COLOR_PRESENT_FG);
   }
+}
+
+function logAttendance(p) {
+  var loc = locateCell(p);
+  if (loc.error) return { ok: false, error: loc.error };
+
+  var cell = loc.sheet.getRange(loc.row, loc.col);
+  var existing = normalizeTimeText(cell.getDisplayValue());
+  if (existing) {
+    return { ok: true, duplicate: true, existing: existing };
+  }
+  writeTime(cell, p.mode, p.time);
   return { ok: true, duplicate: false };
+}
+
+// Manual entry/edit from the app: unlike a scan, this overwrites whatever is
+// already in the cell.
+function setCellAction(p) {
+  var loc = locateCell(p);
+  if (loc.error) return { ok: false, error: loc.error };
+  writeTime(loc.sheet.getRange(loc.row, loc.col), p.mode, p.time);
+  return { ok: true };
+}
+
+// Removes the student&#x27;s whole row (name, ID and every logged time).
+function deleteStudentAction(p) {
+  var sheet = getSS().getSheetByName(p.group);
+  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  var row = findStudentRow(sheet, p.studentId);
+  if (row === -1) return { ok: true, alreadyGone: true }; // nothing to delete is fine
+  sheet.deleteRow(row);
+  return { ok: true };
 }
 
 function clearCellAction(p) {
@@ -788,9 +1000,9 @@ function clearCellAction(p) {
   if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
 
   var headerRow = getHeaderRow(sheet);
-  var inCol = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-  if (inCol === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  var targetCol = (p.mode === &#x27;out&#x27;) ? inCol + 1 : inCol;
+  var suffix = (p.mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
+  var targetCol = findDateColIndex(headerRow, p.sessionLabel, suffix);
+  if (targetCol === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
 
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) return { ok: false, error: &#x27;That student was not found in this group.&#x27; };
@@ -799,13 +1011,111 @@ function clearCellAction(p) {
   return { ok: true };
 }
 
+// Deletes whichever column(s) exist for this date — just Time In, just Time
+// Out, or both if both were ever used (or only the one named in p.mode). Higher column index is deleted first
+// so removing one doesn&#x27;t shift the other&#x27;s position before it&#x27;s handled.
 function deleteColumnAction(p) {
-  var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
-  var headerRow = getHeaderRow(sheet);
-  var col = findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
-  if (col === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  sheet.deleteColumns(col, 2);
+  // p.mode = &#x27;in&#x27; or &#x27;out&#x27; removes just that one column; leave it out to remove both.
+  var onlyMode = (p.mode === &#x27;in&#x27; || p.mode === &#x27;out&#x27;) ? p.mode : null;
+  var deletedAny = false;
+  getSS().getSheets().forEach(function (sheet) {
+    if (sheet.getLastRow() &lt; 2) return;
+    var headerRow = getHeaderRow(sheet);
+    var inCol = (onlyMode === &#x27;out&#x27;) ? -1 : findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
+    var outCol = (onlyMode === &#x27;in&#x27;) ? -1 : findDateColIndex(headerRow, p.sessionLabel, &#x27;Time Out&#x27;);
+    var cols = [inCol, outCol].filter(function (c) { return c !== -1; })
+      .sort(function (a, b) { return b - a; }); // higher index first so deleting one doesn&#x27;t shift the other
+    if (cols.length === 0) return;
+    explodeEventTitles(sheet); // so no event name is lost when a merged banner&#x27;s first column is deleted
+    cols.forEach(function (c) { sheet.deleteColumn(c); deletedAny = true; });
+    mergeEventTitles(sheet);
+  });
+  if (!deletedAny) return { ok: false, error: &#x27;That date column was not found.&#x27; };
+  return { ok: true };
+}
+
+function ensureColumnAction(p) {
+  ensureColumnInAllTabs(p.sessionLabel, p.mode, p.eventName);
+  return { ok: true };
+}
+
+// Makes every tab have the same columns: the union of what the app sends plus
+// whatever any tab already has. Used when a tab is added later.
+function syncColumnsAction(p) {
+  var sheets = getSS().getSheets();
+  var union = [];
+  var seen = {};
+  function add(label, mode, eventName) {
+    var key = label + &#x27;|&#x27; + mode;
+    if (seen[key]) return;
+    seen[key] = true;
+    union.push({ label: label, mode: mode, eventName: eventName || &#x27;Attendance&#x27; });
+  }
+  (p.columns || []).forEach(function (c) { add(c.label, c.mode === &#x27;out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, c.eventName); });
+  sheets.forEach(function (sheet) {
+    var lastCol = sheet.getLastColumn();
+    if (sheet.getLastRow() &lt; 2 || lastCol &lt; 3) return;
+    var headers = sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
+    var titles = readTitles(sheet, lastCol);
+    for (var c = 2; c &lt; lastCol; c++) {
+      var m = /^(.*) - (Time In|Time Out)$/.exec(String(headers[c] || &#x27;&#x27;));
+      if (m) add(m[1], m[2] === &#x27;Time Out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, titles[c]);
+    }
+  });
+
+  var created = 0;
+  sheets.forEach(function (sheet) {
+    ensureHeaderRows(sheet);
+    var have = {};
+    var headers = sheet.getRange(2, 1, 1, Math.max(sheet.getLastColumn(), 2)).getDisplayValues()[0];
+    headers.forEach(function (h) { have[h] = true; });
+    var createdHere = 0;
+    union.forEach(function (u) {
+      var header = u.label + &#x27; - &#x27; + (u.mode === &#x27;out&#x27; ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;);
+      if (!have[header]) { createDateColumn(sheet, u.label, u.mode, u.eventName); created++; createdHere++; }
+    });
+    if (createdHere &gt; 0) mergeEventTitles(sheet);
+  });
+  return { ok: true, columns: union.length, created: created };
+}
+
+// Moves a student (name, ID and every logged time) from one tab to another,
+// then removes the old row. The new row is written first, so if anything goes
+// wrong part-way they can never be lost — at worst they exist in both tabs.
+function moveStudentAction(p) {
+  var ss = getSS();
+  var from = ss.getSheetByName(p.fromGroup);
+  var to = ss.getSheetByName(p.toGroup);
+  if (!from) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.fromGroup + &#x27;&quot; in this sheet.&#x27; };
+  if (!to) return { ok: false, error: &#x27;No tab named &quot;&#x27; + p.toGroup + &#x27;&quot; in this sheet.&#x27; };
+  if (from.getName() === to.getName()) return { ok: false, error: &#x27;That is already their group.&#x27; };
+
+  var fromRow = findStudentRow(from, p.studentId);
+  if (fromRow === -1) return { ok: false, error: &#x27;That student was not found in &quot;&#x27; + p.fromGroup + &#x27;&quot;.&#x27; };
+  if (findStudentRow(to, p.studentId) !== -1) return { ok: false, error: &#x27;They are already in &quot;&#x27; + p.toGroup + &#x27;&quot;.&#x27; };
+
+  var lastCol = from.getLastColumn();
+  var headers = from.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
+  var titles = readTitles(from, lastCol);
+  var values = from.getRange(fromRow, 1, 1, lastCol).getDisplayValues()[0];
+
+  ensureHeaderRows(to);
+  var toRow = Math.max(to.getLastRow() + 1, 3);
+  to.getRange(toRow, 1).setValue(values[0] || &#x27;&#x27;);
+  to.getRange(toRow, 2).setNumberFormat(&#x27;@&#x27;).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+
+  for (var c = 2; c &lt; lastCol; c++) {
+    var m = /^(.*) - (Time In|Time Out)$/.exec(String(headers[c] || &#x27;&#x27;));
+    if (!m) continue;
+    var time = normalizeTimeText(values[c]);
+    if (!time) continue;
+    var mode = (m[2] === &#x27;Time Out&#x27;) ? &#x27;out&#x27; : &#x27;in&#x27;;
+    var info = ensureDateColumn(to, m[1], mode, titles[c]);
+    if (info.created) ensureColumnInAllTabs(m[1], mode, titles[c]); // keep every tab on the same events
+    writeTime(to.getRange(toRow, info.col), mode, time);
+  }
+
+  from.deleteRow(fromRow);
   return { ok: true };
 }
 
@@ -817,13 +1127,17 @@ function addStudentAction(p) {
   if (row === -1) {
     row = Math.max(sheet.getLastRow() + 1, 3);
     sheet.getRange(row, 1).setValue(p.studentName || &#x27;&#x27;);
-    sheet.getRange(row, 2).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
+    sheet.getRange(row, 2).setNumberFormat(&#x27;@&#x27;).setValue(p.studentId).setFontFamily(&#x27;Consolas&#x27;);
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
   return { ok: true };
 }
 
+// Reads the sheet back into the app&#x27;s data shape. Columns are scanned one at
+// a time (not in fixed pairs), since a date may only have a Time In column,
+// only a Time Out column, or both — in any order. Everything is read as
+// DISPLAYED text, so no raw Date objects can leak into the JSON.
 function buildSnapshot() {
   var sheets = getSS().getSheets();
   var groups = {};
@@ -834,54 +1148,53 @@ function buildSnapshot() {
     var lastCol = sheet.getLastColumn();
 
     if (lastRow &lt; 2 || lastCol &lt; 2) {
-      groups[name] = { dateColumns: [], eventNames: {}, roster: [] };
+      groups[name] = { dateColumns: [], eventNames: {}, modes: {}, roster: [] };
       return;
     }
 
-    var headerRow = sheet.getRange(2, 1, 1, lastCol).getValues()[0];
-    var titleRow = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    var headerRow = sheet.getRange(2, 1, 1, lastCol).getDisplayValues()[0];
+    var titleRow = readTitles(sheet, lastCol);
     var dateColumns = [];
     var eventNames = {};
-    var dateColumnIndexes = {};
+    var modes = {}; // label -&gt; { in: bool, out: bool } — which columns exist, even if empty
+    var colByLabelMode = {}; // &quot;label|in&quot; / &quot;label|out&quot; -&gt; 0-indexed column
 
-    // Resolve each attendance column from its header; adjacent columns may
-    // both be Time In when they belong to different sessions.
     for (var c = 2; c &lt; lastCol; c++) {
-      var header = headerRow[c];
-      if (!header) continue;
-      var match = String(header).match(/^(.*) - Time (In|Out)$/);
-      if (!match) continue;
-      var label = match[1];
-      var mode = match[2].toLowerCase();
-      if (!dateColumnIndexes[label]) {
-        dateColumnIndexes[label] = {};
-        dateColumns.push(label);
-        eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
-      }
-      dateColumnIndexes[label][mode] = c;
+      var header = String(headerRow[c] || &#x27;&#x27;);
+      var label = null, mode = null;
+      if (/ - Time In$/.test(header)) { label = header.replace(/ - Time In$/, &#x27;&#x27;); mode = &#x27;in&#x27;; }
+      else if (/ - Time Out$/.test(header)) { label = header.replace(/ - Time Out$/, &#x27;&#x27;); mode = &#x27;out&#x27;; }
+      else continue;
+
+      if (dateColumns.indexOf(label) === -1) dateColumns.push(label);
+      if (!eventNames[label]) eventNames[label] = titleRow[c] || &#x27;Attendance&#x27;;
+      colByLabelMode[label + &#x27;|&#x27; + mode] = c;
+      if (!modes[label]) modes[label] = { in: false, out: false };
+      modes[label][mode] = true;
     }
 
     var roster = [];
     if (lastRow &gt;= 3) {
-      var data = sheet.getRange(3, 1, lastRow - 2, lastCol).getValues();
+      var data = sheet.getRange(3, 1, lastRow - 2, lastCol).getDisplayValues();
       data.forEach(function (row) {
         var studentName = row[0];
         var studentId = row[1];
         if (!studentId) return;
         var attendance = {};
-        dateColumns.forEach(function (label, idx) {
-          var columns = dateColumnIndexes[label];
-          var inVal = columns.in === undefined ? &#x27;&#x27; : row[columns.in];
-          var outVal = columns.out === undefined ? &#x27;&#x27; : row[columns.out];
+        dateColumns.forEach(function (label) {
+          var inIdx = colByLabelMode[label + &#x27;|in&#x27;];
+          var outIdx = colByLabelMode[label + &#x27;|out&#x27;];
+          var inVal = (inIdx !== undefined) ? normalizeTimeText(row[inIdx]) : &#x27;&#x27;;
+          var outVal = (outIdx !== undefined) ? normalizeTimeText(row[outIdx]) : &#x27;&#x27;;
           if (inVal || outVal) {
-            attendance[label] = { in: formatAttendanceTime(inVal), out: formatAttendanceTime(outVal) };
+            attendance[label] = { in: inVal, out: outVal };
           }
         });
         roster.push({ id: String(studentId), name: String(studentName || &#x27;&#x27;), attendance: attendance });
       });
     }
 
-    groups[name] = { dateColumns: dateColumns, eventNames: eventNames, roster: roster };
+    groups[name] = { dateColumns: dateColumns, eventNames: eventNames, modes: modes, roster: roster };
   });
 
   return { ok: true, groups: groups };
@@ -916,6 +1229,39 @@ function buildSnapshot() {
       <label for="lockedGroupSelect">This device logs into</label>
       <select id="lockedGroupSelect"></select>
     </div>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
+    <label>Column control</label>
+    <div class="checkbox-row">
+      <input type="checkbox" id="scannerModeCheckbox">
+      <label for="scannerModeCheckbox">Scanner mode</label>
+    </div>
+    <p class="help-text">For year-level representatives: this device can only log into columns the secretary already started &mdash; it can&rsquo;t start new ones or delete columns, so the Sheet stays tidy. Leave it off on the secretary&rsquo;s device.</p>
+    <div class="btn-row" style="margin-top:8px;align-items:center;">
+      <input type="password" inputmode="numeric" id="pinInput" placeholder="PIN (4&ndash;8 digits)" autocomplete="off" style="flex:1;min-width:120px;">
+      <button type="button" class="btn btn-ghost" id="pinSetBtn">Set PIN</button>
+      <button type="button" class="btn btn-ghost hidden" id="pinClearBtn">Remove</button>
+    </div>
+    <p class="help-text" id="pinStatus"></p>
+  </div>
+  <div class="divider"></div>
+
+  <div class="field">
+    <label>Backup &amp; restore</label>
+    <p class="help-text">Save everything on this device to a file, or load one back &mdash; handy before clearing your browser or switching devices. Your Google Sheets link is left out unless you tick the box below.</p>
+    <div class="checkbox-row" style="margin-top:10px;">
+      <input type="checkbox" id="backupIncludeLink">
+      <label for="backupIncludeLink">Include my Google Sheets link</label>
+    </div>
+    <p class="help-text">Off by default. With it, a new device can reconnect in one step &mdash; but anyone who has the file can read and write your Sheet, so store it like a password.</p>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-ghost" id="backupDownloadBtn" style="flex:1">Download backup</button>
+      <button class="btn btn-ghost" id="backupRestoreBtn" style="flex:1">Restore&hellip;</button>
+    </div>
+    <input type="file" id="backupFileInput" accept=".json,application/json" hidden>
+    <p class="help-text" id="backupInfo"></p>
   </div>
   <div class="divider"></div>
 
@@ -1011,6 +1357,83 @@ function buildSnapshot() {
   </div>
 </div>
 
+<!-- Pick which column to log into (or start a new one) -->
+<div class="modal-backdrop" id="sessionPickBackdrop">
+  <div class="modal">
+    <h3>Which column are you logging into?</h3>
+    <p class="sub" id="sessionPickSub"></p>
+    <div id="sessionPickMain">
+      <div class="session-list" id="sessionPickList"></div>
+      <p class="help-text hidden" id="sessionPickEmpty">No columns yet. The secretary starts the first one &mdash; then it shows up here to pick.</p>
+      <div class="session-or">or</div>
+      <button type="button" class="btn btn-ghost btn-block" id="sessionNewBtn">➕ Start a new column…</button>
+      <p class="help-text" id="sessionNewLocked"></p>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn btn-ghost hidden" id="sessionRefreshBtn" style="flex:1">↻ Refresh list</button>
+        <button type="button" class="btn btn-ghost" id="sessionPickCloseBtn" style="flex:1">Close</button>
+      </div>
+    </div>
+    <div id="sessionNewForm" class="hidden">
+      <div class="field">
+        <label for="newColEvent">Event name</label>
+        <input type="text" id="newColEvent" list="newColEventList" placeholder="e.g. Intramurals Day 1" autocomplete="off">
+        <datalist id="newColEventList"></datalist>
+      </div>
+      <div class="field">
+        <label for="newColDate">Date</label>
+        <input type="date" id="newColDate">
+      </div>
+      <div class="field">
+        <label>Period</label>
+        <div class="period-toggle" role="group" aria-label="Period">
+          <button type="button" class="period-btn active" id="newColAmBtn">AM</button>
+          <button type="button" class="period-btn" id="newColPmBtn">PM</button>
+        </div>
+      </div>
+      <p class="help-text" id="newColNote"></p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="newColBackBtn" style="flex:1">Back</button>
+        <button type="button" class="btn btn-primary" id="newColCreateBtn" style="flex:2">Create &amp; use</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Move a student to another group -->
+<div class="modal-backdrop" id="moveStudentBackdrop">
+  <div class="modal">
+    <h3>Move to another group</h3>
+    <p class="sub" id="moveStudentSub"></p>
+    <div class="field">
+      <label for="moveStudentSelect">Move to</label>
+      <select id="moveStudentSelect"></select>
+      <p class="help-text">Their logged times move with them. If the groups are synced, the Google Sheet is updated too.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="moveStudentCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="moveStudentConfirmBtn" style="flex:1">Move</button>
+    </div>
+  </div>
+</div>
+
+<!-- Enter / edit a single time cell -->
+<div class="modal-backdrop" id="cellEditBackdrop">
+  <div class="modal">
+    <h3 id="cellEditTitle">Enter time</h3>
+    <p class="sub" id="cellEditSub"></p>
+    <div class="field">
+      <label for="cellEditInput">Time</label>
+      <input type="time" id="cellEditInput">
+      <p class="help-text">If this group is synced, the change is saved to the Google Sheet too.</p>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="cellEditCancelBtn" style="flex:1">Cancel</button>
+      <button class="btn btn-danger hidden" id="cellEditClearBtn" style="flex:1">Clear</button>
+      <button class="btn btn-primary" id="cellEditSaveBtn" style="flex:1">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- Libraries: try the local bundled copies first (works fully offline); if either
@@ -1055,8 +1478,9 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'absent-excel-export-2026-08-17';
+const BUILD_TAG = 'session-picker-2026-08-21';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
+let isRestoring = false; // set while a backup is being restored, so no stray save can overwrite it
 
 function loadState(){
   try{
@@ -1066,6 +1490,7 @@ function loadState(){
   return { fileName:'', groups:{}, groupOrder:[], activeGroupId:null, sheetsUrl:'', lockedGroup:null, pendingSync:[] };
 }
 function saveState(){
+  if(isRestoring) return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 function applyAppName(){
@@ -1098,6 +1523,7 @@ function loadSettings(){
   return { appName:'', autoSync:false };
 }
 function saveSettings(){
+  if(isRestoring) return;
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
@@ -1170,6 +1596,18 @@ function currentGroup(){
     });
   });
   if(changed) saveState();
+})();
+
+// Make every group share the same events (older data had different columns per group).
+(function migrateSharedEvents(){
+  Object.values(state.groups).forEach(g=>{
+    if(!g.columnModes) g.columnModes = {};
+    (g.dateColumns||[]).forEach(label=>{
+      if(!g.columnModes[label]) g.columnModes[label] = inferModes(g.roster, label);
+    });
+  });
+  reconcileSessions();
+  saveState();
 })();
 
 let scanMode = (state.scanMode === 'out') ? 'out' : 'in';
@@ -1287,13 +1725,18 @@ function applySheetsSnapshot(groups){
     state.groups[name] = {
       dateColumns: g.dateColumns || [],
       eventNames: g.eventNames || {},
+      columnModes: buildColumnModesFromSnapshot(g),
       roster: (g.roster||[]).map(s=>({ id: String(s.id), key: normalizeId(s.id), name: s.name || '', attendance: s.attendance || {} })),
       syncMode: 'sheets'
     };
     if(!state.groupOrder.includes(name)) state.groupOrder.push(name);
   });
   if(!state.activeGroupId && state.groupOrder.length) state.activeGroupId = state.groupOrder[0];
+  const needsSheetSync = sheetsTabsMissingColumns();
+  reconcileSessions();
   saveState();
+  if(needsSheetSync) syncColumnsToSheetsInBackground();
+  validateCurrentSession(); renderSessionControl();
 }
 
 async function connectSheets(){
@@ -1486,12 +1929,132 @@ function setAutoSync(enabled){
   }
 }
 
+/* ============================== Events are shared by every group ==============================
+   A column is "date label + mode" (e.g. "Sep 16, 2026 (AM)" + Time In). The
+   first successful scan of a given date/mode — in ANY group, by ANYONE — adds
+   that column, with its event name, to EVERY group. That way all groups always
+   have the same set of events, so absence counts line up across groups. */
+function currentEventName(){ return (state.currentSession && state.currentSession.eventName) || 'Attendance'; }
+
+function ensureSessionFields(g){
+  if(!g.eventNames) g.eventNames = {};
+  if(!g.columnModes) g.columnModes = {};
+}
+
+function inferModes(roster, label){
+  return {
+    in: (roster||[]).some(s=>s.attendance && s.attendance[label] && s.attendance[label].in),
+    out: (roster||[]).some(s=>s.attendance && s.attendance[label] && s.attendance[label].out)
+  };
+}
+
+function getColumnModes(group, label){
+  ensureSessionFields(group);
+  return group.columnModes[label] || inferModes(group.roster, label);
+}
+
+// Union of every date/mode column that exists in any group.
+function computeSessionUnion(){
+  const order = [], modes = {}, names = {};
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    (g.dateColumns||[]).forEach(label=>{
+      if(!order.includes(label)) order.push(label);
+      const gm = getColumnModes(g, label);
+      const um = modes[label] || (modes[label] = { in:false, out:false });
+      if(gm.in) um.in = true;
+      if(gm.out) um.out = true;
+      if(!names[label] && g.eventNames[label]) names[label] = g.eventNames[label];
+    });
+  });
+  return { order, modes, names };
+}
+
+// Makes every group have the same columns (used after loading/syncing data
+// and whenever a new group appears).
+function reconcileSessions(){
+  const { order, modes, names } = computeSessionUnion();
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    order.forEach(label=>{
+      if(!g.dateColumns.includes(label)) g.dateColumns.push(label);
+      g.columnModes[label] = { in: modes[label].in, out: modes[label].out };
+      if(!g.eventNames[label]) g.eventNames[label] = names[label] || 'Attendance';
+    });
+  });
+}
+
+// Adds this date/mode column to ALL groups. Returns true if it was brand new.
+function registerSession(label, mode, eventName){
+  let created = false;
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    ensureSessionFields(g);
+    if(!g.dateColumns.includes(label)) g.dateColumns.push(label);
+    if(!g.eventNames[label]) g.eventNames[label] = eventName || 'Attendance';
+    const m = g.columnModes[label] || (g.columnModes[label] = { in:false, out:false });
+    if(!m[mode]){ m[mode] = true; created = true; }
+  });
+  return created;
+}
+
+function sheetsConfigured(){
+  return !!((state.sheetsUrl||'').trim()) && getSheetsGroups().length > 0;
+}
+
+// True if some Sheets tab is missing a column that exists in another group.
+function sheetsTabsMissingColumns(){
+  const { order, modes } = computeSessionUnion();
+  return getSheetsGroups().some(gn=>{
+    const g = state.groups[gn];
+    return order.some(label=>{
+      const gm = getColumnModes(g, label);
+      return (modes[label].in && !gm.in) || (modes[label].out && !gm.out);
+    });
+  });
+}
+
+// A scan in a LOCAL group created a new column: make the Sheet's tabs match.
+function syncNewColumnToSheets(label, mode, eventName){
+  if(!sheetsConfigured()) return;
+  const payload = { action:'ensureColumn', sessionLabel:label, mode, eventName };
+  sheetsPost(payload).catch(err=>{
+    console.error('Column sync failed, queued for retry:', err);
+    queuePendingSync(payload);
+  });
+}
+
+// Pushes the full set of columns so every Sheet tab has all of them.
+function syncColumnsToSheetsInBackground(){
+  if(!sheetsConfigured()) return;
+  const { order, modes, names } = computeSessionUnion();
+  const columns = [];
+  order.forEach(label=>{
+    if(modes[label].in) columns.push({ label, mode:'in', eventName: names[label] || 'Attendance' });
+    if(modes[label].out) columns.push({ label, mode:'out', eventName: names[label] || 'Attendance' });
+  });
+  sheetsPost({ action:'syncColumns', columns }).catch(err=>console.warn('Column sync failed:', err));
+}
+
+// Columns for one tab of a Sheets snapshot (older relay scripts don't send modes).
+function buildColumnModesFromSnapshot(g){
+  const out = {};
+  (g.dateColumns||[]).forEach(label=>{
+    const m = g.modes && g.modes[label];
+    out[label] = m ? { in: !!m.in, out: !!m.out } : inferModes(g.roster, label);
+  });
+  return out;
+}
+
 function createGroup(name){
   const clean = sanitizeGroupName(name);
   if(!clean) return null;
   if(!state.groups[clean]){
-    state.groups[clean] = { dateColumns: [], roster: [], eventNames: {} };
+    state.groups[clean] = { dateColumns: [], roster: [], eventNames: {}, columnModes: {} };
     state.groupOrder.push(clean);
+    reconcileSessions(); // a new group starts with every existing event, so absence counts stay comparable
   }
   state.activeGroupId = clean;
   saveState();
@@ -1573,20 +2136,7 @@ function findStudentAcrossGroups(key){
   return null;
 }
 
-function ensureColumn(label){
-  const g = currentGroup();
-  if(!g) return;
-  if(!g.eventNames) g.eventNames = {};
-  if(!g.dateColumns.includes(label)){
-    g.dateColumns.push(label);
-    // Snapshot whatever's in the Export file name field right now — this is
-    // what lets each date's columns carry the event name that was active
-    // when that session was actually recorded, even if the field gets
-    // changed later for a different day/event.
-    const nameField = $('fileNameInput');
-    g.eventNames[label] = (nameField && nameField.value.trim()) || 'Attendance';
-  }
-}
+
 
 function addOrUpdateStudent(id, name, markPresentForKey, mode){
   const g = currentGroup();
@@ -1602,12 +2152,682 @@ function addOrUpdateStudent(id, name, markPresentForKey, mode){
   }
   if(markPresentForKey){
     const m = (mode === 'out') ? 'out' : 'in';
-    ensureColumn(markPresentForKey);
+    registerSession(markPresentForKey, m, currentEventName());
     if(!s.attendance[markPresentForKey]) s.attendance[markPresentForKey] = { in:'', out:'' };
     if(!s.attendance[markPresentForKey][m]) s.attendance[markPresentForKey][m] = formatTime(new Date());
   }
   saveState();
   return s;
+}
+
+/* ============================== Pick a column / Scanner mode ==============================
+   Columns (events) are shared by every group, so scanners should PICK one that already
+   exists instead of typing a name. Only a secretary device (Scanner mode off) can start
+   new columns, which keeps the Google Sheet tidy. */
+let pendingScanText = null; // a scan that arrived before a column was picked
+let removedSessionNotice = null; // the picked column that was deleted underneath us (shown once in the picker)
+let newColPeriod = 'AM';
+
+function isScannerMode(){ return !!settings.scannerMode; }
+function exportBaseName(){
+  return sanitizeFilename(($('fileNameInput').value || '').trim() || (state.currentSession && state.currentSession.eventName) || 'Attendance');
+}
+function todayInputValue(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDateLabel(dateStr){ // "2026-10-20" -> "Oct 20, 2026" (same style the old typed label used)
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
+  if(!m) return '';
+  return new Date(+m[1], +m[2]-1, +m[3]).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+}
+function isTodayLabel(label){ return String(label).startsWith(todayLabel() + ' ('); }
+
+// --- PIN: a casual guard so a representative can't just untick Scanner mode (not real security) ---
+function hashPin(pin){
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  const str = 'qra:' + String(pin);
+  for(let i = 0; i < str.length; i++){
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function pinIsSet(){ return !!settings.pinHash; }
+function askForPin(message){ // 'ok' | 'wrong' | 'cancel'
+  const v = prompt(message);
+  if(v === null) return 'cancel';
+  return hashPin(v.trim()) === settings.pinHash ? 'ok' : 'wrong';
+}
+function updatePinStatus(){
+  $('pinStatus').textContent = pinIsSet()
+    ? 'A PIN is set — it is needed to turn Scanner mode off, change the PIN, or remove it.'
+    : 'No PIN set — anyone can switch Scanner mode off in Settings.';
+  $('pinClearBtn').classList.toggle('hidden', !pinIsSet());
+}
+function onScannerModeToggle(e){
+  const wantOn = e.target.checked;
+  if(!wantOn && pinIsSet()){
+    const r = askForPin('Enter the secretary PIN to turn Scanner mode off');
+    if(r !== 'ok'){ e.target.checked = true; if(r === 'wrong') alert('That PIN is not right.'); return; }
+  }
+  settings.scannerMode = wantOn;
+  saveSettings();
+  refreshSessionControl();
+  showToast(wantOn ? 'Scanner mode on' : 'Secretary mode on');
+}
+function setPinFromInput(){
+  const v = $('pinInput').value.trim();
+  if(!/^\d{4,8}$/.test(v)){ alert('Use 4 to 8 digits for the PIN.'); return; }
+  if(pinIsSet()){
+    const r = askForPin('Enter the CURRENT PIN to change it');
+    if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
+  }
+  settings.pinHash = hashPin(v);
+  saveSettings();
+  $('pinInput').value = '';
+  updatePinStatus();
+  showToast('PIN saved');
+}
+function clearPin(){
+  if(!pinIsSet()) return;
+  const r = askForPin('Enter the current PIN to remove it');
+  if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
+  delete settings.pinHash;
+  saveSettings();
+  updatePinStatus();
+  showToast('PIN removed');
+}
+
+// --- the picked column ---
+// Forgets a column that no longer exists anywhere (e.g. the secretary deleted it).
+function validateCurrentSession(){
+  const cur = state.currentSession;
+  if(cur && cur.label && state.groupOrder.length > 0 && !computeSessionUnion().modes[cur.label]){
+    removedSessionNotice = { label: cur.label, eventName: cur.eventName };
+    state.currentSession = null;
+    saveState();
+  }
+}
+function renderSessionControl(){
+  const btn = $('sessionPickBtn'); if(!btn) return;
+  const c = state.currentSession;
+  btn.classList.toggle('empty', !c);
+  $('sessionPickEvent').textContent = c ? c.eventName : 'No column picked yet';
+  $('sessionPickLabel').textContent = c ? c.label : 'Tap to pick one or start a new one';
+  $('sessionRoleText').textContent = isScannerMode()
+    ? '🔒 Scanner mode — pick a column the secretary already started.'
+    : 'Secretary mode — you can start new columns.';
+  $('scannerModeCheckbox').checked = isScannerMode();
+  updateModalMarkPresentLabel();
+}
+function refreshSessionControl(){
+  validateCurrentSession();
+  renderSessionControl();
+  renderTable();
+}
+
+// Why a scan can't go ahead right now (or { ok:true }).
+function sessionStatus(){
+  const cur = state.currentSession;
+  if(!cur || !cur.label) return { ok:false, reason:'none' };
+  const known = computeSessionUnion().modes[cur.label];
+  if(!known && state.groupOrder.length > 0) return { ok:false, reason:'gone' };
+  if(!(known && known[scanMode])) return { ok:false, reason:'missing-mode' };
+  return { ok:true };
+}
+
+// Called before every scan. Opens the picker if no column is picked; stops scanners from
+// creating a missing Time In/Out column; asks the secretary before adding one.
+function ensureSessionReady(rawText){
+  const st = sessionStatus();
+  if(st.ok) return true;
+  const cur = state.currentSession;
+  if(st.reason === 'none' || st.reason === 'gone'){
+    if(st.reason === 'gone'){ state.currentSession = null; saveState(); renderSessionControl(); }
+    pendingScanText = rawText || null;
+    openSessionPicker(st.reason);
+    return false;
+  }
+  // The column exists, but not for this Time In / Time Out mode yet.
+  if(isScannerMode()){
+    beep(320,160); vibrate(120);
+    setResultBanner('unknown', '🔒', `No ${modeLabel(scanMode)} column yet`, `${cur.eventName} · ${cur.label} — ask the secretary to start it (then tap Refresh in Settings)`, { status:'ASK THE SECRETARY', statusKind:'bad' });
+    resetResultBannerSoon();
+    return false;
+  }
+  return confirm(`There's no ${modeLabel(scanMode)} column for "${cur.eventName} · ${cur.label}" yet.\n\nAdd it? It will be created in every group${sheetsConfigured() ? ' and every Sheet tab' : ''}.`);
+}
+
+// --- the picker dialog ---
+function openSessionPicker(reason){
+  modalOpen = true; // pause scanning while choosing
+  $('sessionPickBackdrop').classList.add('open');
+  showSessionList(removedSessionNotice ? 'gone' : reason);
+}
+function closeSessionPicker(){
+  $('sessionPickBackdrop').classList.remove('open');
+  modalOpen = false;
+  pendingScanText = null;
+}
+function showSessionList(reason){
+  $('sessionNewForm').classList.add('hidden');
+  $('sessionPickMain').classList.remove('hidden');
+  $('sessionPickSub').textContent = reason === 'gone'
+    ? (removedSessionNotice ? `"${removedSessionNotice.eventName} · ${removedSessionNotice.label}" was removed. Pick another column.` : 'That column was removed. Pick another one.')
+    : 'Pick the column your scans should go into, so everyone lines up in the same place.';
+  renderSessionList();
+}
+function renderSessionList(){
+  const { order, modes, names } = computeSessionUnion();
+  const list = $('sessionPickList'); list.innerHTML = '';
+  const items = order.slice().reverse().filter(l=>modes[l] && (modes[l].in || modes[l].out));
+  items.sort((a,b)=> (isTodayLabel(b) ? 1 : 0) - (isTodayLabel(a) ? 1 : 0)); // today's first
+  $('sessionPickEmpty').classList.toggle('hidden', items.length > 0);
+  items.forEach(label=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isCur = !!(state.currentSession && state.currentSession.label === label);
+    btn.className = 'session-item' + (isCur ? ' current' : '');
+    const ev = document.createElement('span'); ev.className = 'si-event'; ev.textContent = names[label] || 'Attendance';
+    const lb = document.createElement('span'); lb.className = 'si-label'; lb.textContent = label;
+    const tags = document.createElement('span'); tags.className = 'si-tags';
+    const tag = (text, cls)=>{ const t = document.createElement('span'); t.className = 'si-tag ' + cls; t.textContent = text; tags.appendChild(t); };
+    if(isTodayLabel(label)) tag('TODAY', 'today');
+    tag(modes[label].in ? 'Time In ✓' : 'Time In —', modes[label].in ? 'on' : 'off');
+    tag(modes[label].out ? 'Time Out ✓' : 'Time Out —', modes[label].out ? 'on' : 'off');
+    if(isCur) tag('IN USE', 'use');
+    btn.appendChild(ev); btn.appendChild(lb); btn.appendChild(tags);
+    btn.onclick = ()=> chooseSession(label);
+    list.appendChild(btn);
+  });
+  const canCreate = !isScannerMode();
+  $('sessionNewBtn').disabled = !canCreate;
+  $('sessionNewLocked').textContent = canCreate ? '' : '🔒 Scanner mode: only the secretary can start a new column.';
+  $('sessionRefreshBtn').classList.toggle('hidden', !sheetsConfigured());
+}
+function chooseSession(label){
+  const { names } = computeSessionUnion();
+  state.currentSession = { label, eventName: names[label] || 'Attendance' };
+  removedSessionNotice = null;
+  saveState();
+  const t = pendingScanText;
+  closeSessionPicker();
+  renderSessionControl();
+  renderTable();
+  showToast(`Logging into: ${state.currentSession.eventName} · ${label}`);
+  if(t) processScannedCode(t); // the scan that opened the picker goes through now
+}
+
+// --- starting a new column (secretary only) ---
+function setNewColPeriod(p){
+  newColPeriod = (p === 'PM') ? 'PM' : 'AM';
+  $('newColAmBtn').classList.toggle('active', newColPeriod === 'AM');
+  $('newColPmBtn').classList.toggle('active', newColPeriod === 'PM');
+}
+function showNewColumnForm(){
+  if(isScannerMode()) return;
+  $('sessionPickMain').classList.add('hidden');
+  $('sessionNewForm').classList.remove('hidden');
+  $('sessionPickSub').textContent = 'Start a new column for everyone to pick.';
+  const dl = $('newColEventList'); dl.innerHTML = '';
+  const { names } = computeSessionUnion();
+  Array.from(new Set(Object.values(names))).forEach(n=>{ const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
+  $('newColEvent').value = state.currentSession ? state.currentSession.eventName : '';
+  $('newColDate').value = todayInputValue();
+  setNewColPeriod(sessionPeriod);
+  $('newColNote').textContent = `This starts a ${modeLabel(scanMode)} column in every group. (Switch Time In / Time Out first if you want the other one.)`;
+  setTimeout(()=>$('newColEvent').focus(), 50);
+}
+function createNewColumnFromForm(){
+  if(isScannerMode()) return;
+  const eventName = $('newColEvent').value.trim();
+  if(!eventName){ alert('Type the event name first (for example "Intramurals Day 1").'); return; }
+  const dateLabel = formatDateLabel($('newColDate').value);
+  if(!dateLabel){ alert('Pick the date for this column.'); return; }
+  if(state.groupOrder.length === 0){ alert('Add or import a group first, then start the column.'); return; }
+  const label = `${dateLabel} (${newColPeriod})`;
+  const existing = computeSessionUnion();
+  if(existing.order.includes(label)){
+    alert(`A column for ${label} already exists ("${existing.names[label] || 'Attendance'}"). Pick it from the list instead of making a second one.`);
+    showSessionList();
+    return;
+  }
+  const isNew = registerSession(label, scanMode, eventName); // creates it in EVERY group
+  if(isNew) syncNewColumnToSheets(label, scanMode, eventName); // ...and every Sheet tab
+  sessionPeriod = newColPeriod; state.sessionPeriod = newColPeriod;
+  state.currentSession = { label, eventName };
+  removedSessionNotice = null;
+  saveState();
+  const t = pendingScanText;
+  closeSessionPicker();
+  renderSessionControl();
+  renderTable();
+  showToast(`New column started: ${eventName} · ${label}`);
+  if(t) processScannedCode(t);
+}
+
+/* ============================== Backup & restore ============================== */
+const BACKUP_APP_ID = 'qr-attendance-backup';
+const BACKUP_VERSION = 1;
+// Only "look and feel" preferences travel in a backup — not device-specific ones.
+const BACKUP_SETTING_KEYS = ['appName', 'columnWidth', 'importFormat'];
+
+function reloadApp(){ location.reload(); }
+
+// Everything that lives on this device. The retry queue and the device's group lock
+// are never included, and the Sheets link (it can write to your sheet) only when asked.
+function buildBackup(includeLink){
+  const groups = {};
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name];
+    if(g) groups[name] = JSON.parse(JSON.stringify(g));
+  });
+  const savedSettings = {};
+  BACKUP_SETTING_KEYS.forEach(k=>{ if(settings[k] !== undefined) savedSettings[k] = settings[k]; });
+  const backup = {
+    app: BACKUP_APP_ID,
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: { groups, groupOrder: state.groupOrder.slice(), activeGroupId: state.activeGroupId, settings: savedSettings }
+  };
+  // Only when explicitly asked: the link lets whoever holds the file read and write the Sheet.
+  const url = (state.sheetsUrl || '').trim();
+  if(includeLink && url){
+    backup.data.sheetsUrl = url;
+    backup.containsSheetsLink = true;
+  }
+  return backup;
+}
+
+function updateBackupInfo(){
+  const el = $('backupInfo'); if(!el) return;
+  const t = settings.lastBackupAt ? new Date(settings.lastBackupAt) : null;
+  el.textContent = (t && !isNaN(t))
+    ? 'Last backup downloaded: ' + t.toLocaleString([], { dateStyle:'medium', timeStyle:'short' })
+    : 'No backup downloaded from this device yet.';
+}
+
+function downloadBackup(){
+  const wantLink = !!$('backupIncludeLink').checked;
+  const hasLink = !!((state.sheetsUrl || '').trim());
+  const backup = buildBackup(wantLink);
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qr-attendance-backup-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}${backup.containsSheetsLink ? '-with-sheets-link' : ''}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  settings.lastBackupAt = d.toISOString();
+  saveSettings();
+  updateBackupInfo();
+  $('backupIncludeLink').checked = false; // always off again, so a link is never included by accident
+  showToast(backup.containsSheetsLink ? 'Backup downloaded — it contains your Sheets link, keep it private'
+    : (wantLink && !hasLink ? 'Backup downloaded (no Sheets link was saved, so none included)' : 'Backup downloaded'));
+}
+
+function sanitizeAttendance(att){
+  const out = {};
+  if(att && typeof att === 'object'){
+    Object.keys(att).forEach(label=>{
+      const r = att[label];
+      if(!r || typeof r !== 'object') return;
+      out[label] = { in: typeof r.in === 'string' ? r.in : '', out: typeof r.out === 'string' ? r.out : '' };
+    });
+  }
+  return out;
+}
+
+// Real Apps Script web-app addresses only — a restored link decides where scans get sent.
+const SHEETS_URL_PATTERN = /^https:\/\/script\.google\.com\/(?:macros\/s\/|a\/macros\/[^\/\s]+\/s\/)[A-Za-z0-9_\-]+\/exec$/;
+
+// Checks the file really is one of our backups and cleans every field.
+function validateBackup(obj){
+  if(!obj || typeof obj !== 'object' || obj.app !== BACKUP_APP_ID){
+    return { ok:false, error:"That file isn't a backup made by this app." };
+  }
+  if(typeof obj.version !== 'number' || obj.version > BACKUP_VERSION){
+    return { ok:false, error:'That backup was made by a newer version of the app. Update the app first, then try again.' };
+  }
+  const d = obj.data;
+  if(!d || !d.groups || typeof d.groups !== 'object' || Array.isArray(d.groups)){
+    return { ok:false, error:'That backup file is damaged (no groups found in it).' };
+  }
+  const order = (Array.isArray(d.groupOrder) ? d.groupOrder : []).filter(n=>typeof n === 'string' && Object.prototype.hasOwnProperty.call(d.groups, n));
+  Object.keys(d.groups).forEach(n=>{ if(!order.includes(n)) order.push(n); });
+  const groups = {};
+  const cleanOrder = [];
+  for(const name of order){
+    if(name === '__proto__') continue;
+    const g = d.groups[name];
+    if(!g || typeof g !== 'object' || !Array.isArray(g.roster)){
+      return { ok:false, error:`The group "${name}" in that backup is damaged, so nothing was restored.` };
+    }
+    groups[name] = {
+      dateColumns: Array.isArray(g.dateColumns) ? g.dateColumns.filter(x=>typeof x === 'string') : [],
+      eventNames: (g.eventNames && typeof g.eventNames === 'object') ? g.eventNames : {},
+      columnModes: (g.columnModes && typeof g.columnModes === 'object') ? g.columnModes : {},
+      roster: g.roster
+        .filter(st=>st && typeof st === 'object' && String(st.id === undefined || st.id === null ? '' : st.id).trim() !== '')
+        .map(st=>({ id:String(st.id), key:normalizeId(st.id), name: typeof st.name === 'string' ? st.name : '', attendance: sanitizeAttendance(st.attendance) })),
+      wasSynced: g.syncMode === 'sheets'
+    };
+    cleanOrder.push(name);
+  }
+  let sheetsUrl = '', linkIgnored = false;
+  if(typeof d.sheetsUrl === 'string' && d.sheetsUrl.trim()){
+    const u = d.sheetsUrl.trim();
+    if(SHEETS_URL_PATTERN.test(u)) sheetsUrl = u; else linkIgnored = true;
+  }
+  return { ok:true, groups, order: cleanOrder, activeGroupId: d.activeGroupId, settings: (d.settings && typeof d.settings === 'object') ? d.settings : {}, exportedAt: obj.exportedAt, sheetsUrl, linkIgnored };
+}
+
+// Works out what a restore will do, without changing anything.
+//  - Connected to a Sheet: groups that live in the Sheet are never touched (the
+//    Sheet is the source of truth), so synced groups in the backup are skipped.
+//  - Not connected: synced groups in the backup come back as ordinary local copies.
+function planRestore(parsed){
+  const currentUrl = (state.sheetsUrl || '').trim();
+  const backupUrl = parsed.sheetsUrl || '';
+  const switching = !!(backupUrl && currentUrl && backupUrl !== currentUrl); // the backup is from a different Sheet
+  const adopting = !!(backupUrl && !currentUrl);                            // e.g. a new device getting the link
+  const keepCurrentSynced = !!currentUrl && !switching;                      // the Sheet stays the source of truth
+  const keptSynced = keepCurrentSynced ? state.groupOrder.filter(n=>state.groups[n] && state.groups[n].syncMode === 'sheets') : [];
+  const taken = new Set(keptSynced);
+  const restored = [];
+  let skipped = 0, renamed = 0;
+  parsed.order.forEach(name=>{
+    const g = parsed.groups[name];
+    if(keepCurrentSynced && g.wasSynced){ skipped++; return; } // its live data is in the Sheet
+    let finalName = name;
+    if(taken.has(finalName)){
+      renamed++;
+      let i = 1;
+      finalName = `${name} (restored)`;
+      while(taken.has(finalName)){ i++; finalName = `${name} (restored ${i})`; }
+    }
+    taken.add(finalName);
+    // With the backup's own link restored, its synced groups stay synced; otherwise they become local copies.
+    restored.push({ originalName:name, finalName, group:g, synced: !!(backupUrl && g.wasSynced) });
+  });
+  const droppedSynced = switching ? state.groupOrder.filter(n=>state.groups[n] && state.groups[n].syncMode === 'sheets').length : 0;
+  const replacing = state.groupOrder.filter(n=>!keptSynced.includes(n)).length;
+  const students = restored.reduce((n,r)=>n + r.group.roster.length, 0);
+  return { currentUrl, backupUrl, switching, adopting, keptSynced, restored, skipped, renamed, replacing, droppedSynced, students, parsed };
+}
+
+function applyRestore(plan){
+  const newGroups = {};
+  const newOrder = [];
+  plan.keptSynced.forEach(n=>{ newGroups[n] = state.groups[n]; newOrder.push(n); });
+  plan.restored.forEach(r=>{
+    const g = r.group;
+    newGroups[r.finalName] = { dateColumns:g.dateColumns, eventNames:g.eventNames, columnModes:g.columnModes, roster:g.roster };
+    if(r.synced) newGroups[r.finalName].syncMode = 'sheets';
+    newOrder.push(r.finalName);
+  });
+  const wanted = plan.parsed.activeGroupId;
+  const wantedRestored = plan.restored.find(r=>r.originalName === wanted);
+  const newState = Object.assign({}, state, {
+    groups: newGroups,
+    groupOrder: newOrder,
+    activeGroupId: wantedRestored ? wantedRestored.finalName : (newGroups[state.activeGroupId] ? state.activeGroupId : (newOrder[0] || null)),
+    sheetsUrl: plan.backupUrl || state.sheetsUrl,
+    lockedGroup: (state.lockedGroup && newGroups[state.lockedGroup]) ? state.lockedGroup : null,
+    // Only writes that belong to groups that are still here stay queued.
+    pendingSync: (state.pendingSync || []).filter(q=>plan.keptSynced.includes(q.group))
+  });
+  const newSettings = Object.assign({}, settings);
+  const bs = plan.parsed.settings;
+  if(typeof bs.appName === 'string') newSettings.appName = bs.appName.slice(0, 80);
+  if(typeof bs.columnWidth === 'string' && COLUMN_WIDTH_PRESETS[bs.columnWidth]) newSettings.columnWidth = bs.columnWidth;
+  if(typeof bs.importFormat === 'string' && Array.from($('importFormatSelect').options).some(o=>o.value === bs.importFormat)) newSettings.importFormat = bs.importFormat;
+
+  isRestoring = true; // freeze normal saving so nothing can overwrite what we write next
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+  try{ sessionStorage.setItem('qrJustRestored', '1'); }catch(e){}
+  reloadApp(); // start clean from the restored data
+}
+
+function readFileText(file){
+  if(file && typeof file.text === 'function') return file.text();
+  return new Promise((resolve, reject)=>{
+    const fr = new FileReader();
+    fr.onload = ()=>resolve(String(fr.result));
+    fr.onerror = ()=>reject(fr.error);
+    fr.readAsText(file);
+  });
+}
+
+async function restoreFromFile(file){
+  if(!file) return;
+  let obj;
+  try{
+    obj = JSON.parse(await readFileText(file));
+  }catch(e){
+    alert("That file couldn't be read as a backup. Pick a .json file that was downloaded from this app.");
+    return;
+  }
+  const parsed = validateBackup(obj);
+  if(!parsed.ok){ alert(parsed.error); return; }
+  const plan = planRestore(parsed);
+  if(plan.restored.length === 0){
+    alert('Nothing to restore: every group in that backup is a synced group, and its live data is in your Google Sheet.');
+    return;
+  }
+  const when = parsed.exportedAt && !isNaN(new Date(parsed.exportedAt))
+    ? new Date(parsed.exportedAt).toLocaleString([], { dateStyle:'medium', timeStyle:'short' }) : 'an unknown date';
+  const lines = [
+    `Restore the backup from ${when}?`,
+    '',
+    `• ${plan.restored.length} group${plan.restored.length===1?'':'s'}, ${plan.students} student${plan.students===1?'':'s'} will be loaded.`
+  ];
+  if(plan.replacing > 0) lines.push(`• This REPLACES the ${plan.replacing} ${plan.switching ? '' : 'local '}group${plan.replacing===1?'':'s'} currently on this device.`);
+  if(plan.skipped > 0) lines.push(`• ${plan.skipped} synced group${plan.skipped===1?'':'s'} in the backup ${plan.skipped===1?'is':'are'} skipped — ${plan.skipped===1?'its':'their'} live data is in your Google Sheet and stays as it is.`);
+  if(plan.renamed > 0) lines.push(`• ${plan.renamed} restored group${plan.renamed===1?'':'s'} share${plan.renamed===1?'s':''} a name with a synced group and will be named "… (restored)".`);
+  if(plan.adopting) lines.push(`• It also sets this device's Google Sheets link to:\n   ${plan.backupUrl}\n   Only continue if this backup is yours.`);
+  if(plan.switching) lines.push(`• It REPLACES this device's Google Sheets link (and its ${plan.droppedSynced} synced group${plan.droppedSynced===1?'':'s'}) with a different Sheet:\n   ${plan.backupUrl}\n   Scans will go to that Sheet from now on. Only continue if this backup is yours.`);
+  if(parsed.linkIgnored) lines.push("• The Sheets link in the file doesn't look like a Google Apps Script link, so it was ignored.");
+  lines.push((plan.adopting || plan.switching) ? '• Your other device settings are kept.' : '• Your Google Sheets link and device settings are kept.', '', "This can't be undone — download a backup of what's here first if you're not sure.");
+  if(!confirm(lines.join('\n'))) return;
+  applyRestore(plan);
+}
+
+/* ============================== Move a student to another group ============================== */
+let moveCtx = null;
+
+function openMoveStudent(group, student){
+  const fromName = state.activeGroupId;
+  const fromSheets = !!(group && group.syncMode === 'sheets');
+  moveCtx = { fromName, student };
+  modalOpen = true; // pause scanning while the dialog is open
+  $('moveStudentSub').textContent = `${student.name || student.id} · currently in ${fromName}`;
+  const sel = $('moveStudentSelect'); sel.innerHTML = '';
+  let usable = 0;
+  state.groupOrder.forEach(name=>{
+    if(name === fromName) return;
+    const g = state.groups[name]; if(!g) return;
+    const toSheets = g.syncMode === 'sheets';
+    const opt = document.createElement('option'); opt.value = name;
+    if(toSheets !== fromSheets){
+      opt.disabled = true;
+      opt.textContent = `${name} (${toSheets ? 'synced' : 'local'} — can't mix with ${fromSheets ? 'synced' : 'local'} groups)`;
+    } else { opt.textContent = name; usable++; }
+    sel.appendChild(opt);
+  });
+  const firstUsable = Array.from(sel.options).find(o=>!o.disabled);
+  if(firstUsable) sel.value = firstUsable.value;
+  $('moveStudentConfirmBtn').disabled = usable === 0;
+  $('moveStudentBackdrop').classList.add('open');
+}
+function closeMoveStudent(){
+  $('moveStudentBackdrop').classList.remove('open');
+  modalOpen = false;
+  moveCtx = null;
+}
+async function confirmMoveStudent(){
+  if(!moveCtx) return;
+  const { fromName, student } = moveCtx;
+  const toName = $('moveStudentSelect').value;
+  closeMoveStudent();
+  if(!toName) return;
+  await moveStudentBetweenGroups(fromName, toName, student);
+}
+
+// Network-first for synced groups: if the Sheet can't be updated, nothing moves here either.
+async function moveStudentBetweenGroups(fromName, toName, student){
+  const from = state.groups[fromName], to = state.groups[toName];
+  if(!from || !to || fromName === toName) return;
+  const fromSheets = from.syncMode === 'sheets', toSheets = to.syncMode === 'sheets';
+  if(fromSheets !== toSheets){
+    alert('A synced group and a local group can\'t exchange students. Move between two synced groups, or between two local groups.');
+    return;
+  }
+  if(to.roster.some(x=>x.key === student.key)){
+    alert(`${student.name || student.id} is already in "${toName}".`);
+    return;
+  }
+  if(fromSheets){
+    try{
+      await sheetsPost({ action:'moveStudent', fromGroup: fromName, toGroup: toName, studentId: student.id });
+    }catch(err){
+      alert('Could not move them on the Google Sheet, so nothing was moved: ' + err.message);
+      return;
+    }
+  }
+  from.roster = from.roster.filter(x=>x.key !== student.key);
+  to.roster.push(student);
+  reconcileSessions(); // the new group must have every date column their times belong to
+  // Anything still queued for them should now go to their new tab.
+  if(Array.isArray(state.pendingSync)){
+    state.pendingSync.forEach(p=>{ if(p.group === fromName && p.studentId === student.id) p.group = toName; });
+  }
+  saveState();
+  renderGroupTabs();
+  renderTable();
+  showToast(`Moved ${student.name || student.id} to ${toName}`);
+}
+
+/* ============================== Edit / enter a single time ============================== */
+let cellEditCtx = null;
+
+function timeTextTo24h(t){ // "5:28 PM" -> "17:28"
+  const m = /^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/.exec((t||'').trim());
+  if(!m) return '';
+  let h = parseInt(m[1],10);
+  if(m[3]) h = (h % 12) + (/p/i.test(m[3]) ? 12 : 0);
+  return String(h).padStart(2,'0') + ':' + m[2];
+}
+function time24hToText(v){ // "17:28" -> "5:28 PM"
+  const m = /^(\d{1,2}):(\d{2})/.exec(v||'');
+  if(!m) return '';
+  let h = parseInt(m[1],10);
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m[2]} ${ap}`;
+}
+
+function openCellEditor(group, student, sessionKey, mode){
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  cellEditCtx = { group, groupName: state.activeGroupId, student, sessionKey, mode };
+  modalOpen = true; // pause scanning while editing
+  $('cellEditTitle').textContent = current ? 'Edit time' : 'Enter time';
+  $('cellEditSub').textContent = `${student.name || student.id} — ${sessionKey} · ${mode==='out' ? 'Time Out' : 'Time In'}`;
+  $('cellEditInput').value = timeTextTo24h(current);
+  $('cellEditClearBtn').classList.toggle('hidden', !current);
+  $('cellEditBackdrop').classList.add('open');
+  setTimeout(()=>$('cellEditInput').focus(), 50);
+}
+function closeCellEditor(){
+  $('cellEditBackdrop').classList.remove('open');
+  modalOpen = false;
+  cellEditCtx = null;
+}
+function saveCellEdit(){
+  if(!cellEditCtx) return;
+  const text = time24hToText($('cellEditInput').value);
+  if(!text){ alert('Pick a time first.'); return; }
+  const { group, groupName, student, sessionKey, mode } = cellEditCtx;
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  closeCellEditor();
+  if(text === current) return;
+  setAttendanceCellSynced(group, groupName, student, sessionKey, mode, text);
+}
+function clearFromCellEditor(){
+  if(!cellEditCtx) return;
+  const { group, student, sessionKey, mode } = cellEditCtx;
+  const current = ((student.attendance[sessionKey]||{})[mode]) || '';
+  if(!confirm(`Clear ${student.name || student.id}'s ${mode==='out' ? 'Time Out' : 'Time In'} for "${sessionKey}" (currently ${current})?\n\nThis can't be undone.`)) return;
+  closeCellEditor();
+  clearAttendanceCellSynced(group, student, sessionKey, mode);
+}
+
+// Writes a manually entered/edited time locally, then to the Sheet if synced.
+function setAttendanceCellSynced(group, groupName, student, sessionKey, mode, text){
+  if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
+  student.attendance[sessionKey][mode] = text;
+  const eventName = (group.eventNames && group.eventNames[sessionKey]) || currentEventName();
+  registerSession(sessionKey, mode, eventName);
+  saveState();
+  if(!updateAttendanceCell(student.key, sessionKey, mode, text)) renderTable();
+  showToast('Saved');
+
+  if(group.syncMode === 'sheets'){
+    const payload = { action:'setCell', group: groupName, studentId: student.id, studentName: student.name, sessionLabel: sessionKey, mode, time: text, eventName };
+    sheetsPost(payload).catch(err=>{
+      console.error('Edit failed to sync, queued for retry:', err);
+      queuePendingSync(payload);
+      showToast('⚠️ Could not save on the Sheet — will retry');
+    });
+  }
+}
+
+function renameStudentSynced(group, student){
+  const newName = prompt('Full name', student.name);
+  if(newName === null) return;
+  student.name = newName.trim();
+  saveState();
+  renderTable();
+  if(group && group.syncMode === 'sheets'){
+    // "addStudent" on an existing ID just updates the name in that row.
+    const payload = { action:'addStudent', group: state.activeGroupId, studentId: student.id, studentName: student.name };
+    sheetsPost(payload).catch(err=>{
+      console.error('Rename failed to sync, queued for retry:', err);
+      queuePendingSync(payload);
+      showToast('⚠️ Could not save the new name on the Sheet — will retry');
+    });
+  }
+}
+
+// Network-first for synced groups: if the Sheet can't be updated, nothing is
+// deleted here either (otherwise the next refresh would just bring them back).
+async function deleteStudentSynced(group, student){
+  const groupName = state.activeGroupId;
+  if(group && group.syncMode === 'sheets'){
+    try{
+      await sheetsPost({ action:'deleteStudent', group: groupName, studentId: student.id });
+    }catch(err){
+      alert('Could not remove them on the Google Sheet, so nothing was deleted: ' + err.message);
+      return;
+    }
+  }
+  if(group) group.roster = group.roster.filter(x=>x.key!==student.key);
+  // Drop any queued writes for this student so they can't re-create the row later.
+  if(Array.isArray(state.pendingSync)){
+    state.pendingSync = state.pendingSync.filter(p=>!(p.group===groupName && p.studentId===student.id));
+  }
+  saveState();
+  renderTable();
+  showToast('Removed');
 }
 
 function deleteStudent(key){
@@ -1619,28 +2839,63 @@ function deleteStudent(key){
 }
 
 function deleteColumn(label){
-  const g = currentGroup();
-  if(!g) return;
-  g.dateColumns = g.dateColumns.filter(c=>c!==label);
-  g.roster.forEach(s=>{ delete s.attendance[label]; });
+  // Events are shared, so deleting one removes it from EVERY group.
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name]; if(!g) return;
+    g.dateColumns = g.dateColumns.filter(c=>c!==label);
+    if(g.columnModes) delete g.columnModes[label];
+    if(g.eventNames) delete g.eventNames[label];
+    g.roster.forEach(s=>{ delete s.attendance[label]; });
+  });
+  dropQueuedWritesFor(label, null);
   saveState();
+  validateCurrentSession(); renderSessionControl();
   renderTable();
+}
+
+// Removes just the Time In OR the Time Out column of a date, in every group.
+// If that was the date's only column, the whole date goes.
+function deleteColumnMode(label, mode){
+  state.groupOrder.forEach(name=>{
+    const g = state.groups[name]; if(!g) return;
+    ensureSessionFields(g);
+    const m = Object.assign({ in:false, out:false }, getColumnModes(g, label));
+    m[mode] = false;
+    g.roster.forEach(s=>{ if(s.attendance[label]) s.attendance[label][mode] = ''; });
+    if(!m.in && !m.out){
+      g.dateColumns = g.dateColumns.filter(c=>c!==label);
+      delete g.columnModes[label];
+      delete g.eventNames[label];
+      g.roster.forEach(s=>{ delete s.attendance[label]; });
+    } else {
+      g.columnModes[label] = m;
+    }
+  });
+  dropQueuedWritesFor(label, mode);
+  saveState();
+  validateCurrentSession(); renderSessionControl();
+  renderTable();
+}
+
+// Queued (not yet synced) writes for a column that was just deleted would re-create it later.
+function dropQueuedWritesFor(label, mode){
+  if(!Array.isArray(state.pendingSync)) return;
+  state.pendingSync = state.pendingSync.filter(q=>!(q.sessionLabel === label && (!mode || q.mode === mode)));
 }
 
 // Deletes a date column, syncing the deletion to the Google Sheet first when
 // the active group is Sheets-synced (so other devices see it disappear too).
-async function deleteColumnSynced(label){
-  const g = currentGroup();
-  if(!g) return;
-  if(g.syncMode === 'sheets'){
+async function deleteColumnSynced(label, mode){
+  if(sheetsConfigured()){
     try{
-      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label });
+      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label, mode: mode || undefined });
     }catch(err){
-      alert('Could not delete that column on the Google Sheet: ' + err.message);
+      alert('Could not delete on the Google Sheet: ' + err.message);
       return;
     }
   }
-  deleteColumn(label);
+  if(mode) deleteColumnMode(label, mode); else deleteColumn(label);
+  showToast(mode ? `Removed the ${mode === 'out' ? 'Time Out' : 'Time In'} column from all groups` : 'Deleted from all groups');
 }
 
 /* ============================== Import roster ============================== */
@@ -1765,9 +3020,7 @@ let lastScan = { text:null, time:0 };
 let modalOpen = false;
 
 function getSessionLabel(){
-  const v = $('sessionLabelInput').value.trim();
-  const base = v || todayLabel();
-  return `${base} (${sessionPeriod})`;
+  return (state.currentSession && state.currentSession.label) || '';
 }
 
 function modeLabel(m){ return m === 'out' ? 'Time Out' : 'Time In'; }
@@ -1781,32 +3034,48 @@ function setScanMode(mode){
   updateModalMarkPresentLabel();
 }
 
-function setSessionPeriod(period){
-  sessionPeriod = (period === 'PM') ? 'PM' : 'AM';
-  state.sessionPeriod = sessionPeriod;
-  saveState();
-  $('periodAmBtn').classList.toggle('active', sessionPeriod === 'AM');
-  $('periodPmBtn').classList.toggle('active', sessionPeriod === 'PM');
-  renderTable();
-}
+
 
 function updateModalMarkPresentLabel(){
   const lbl = $('modalMarkPresentLabel');
-  if(lbl) lbl.textContent = `Mark ${modeLabel(scanMode)} for today's session`;
+  if(!lbl) return;
+  const c = state.currentSession;
+  lbl.textContent = c ? `Also log ${modeLabel(scanMode)} into: ${c.eventName} · ${c.label}` : 'No column picked yet — pick one at the top to log them too';
 }
 
-function setResultBanner(kind, icon, title, sub){
+// Fills the big scan-result panel. `title` is the big line (the name), `sub` the small
+// line under it (ID · group). `extra` adds the colored badge and the absence count.
+function setResultBanner(kind, icon, title, sub, extra){
   const el = $('resultBanner');
-  el.className = 'result-banner' + (kind ? ' '+kind : '');
+  el.className = 'scan-panel' + (kind ? ' ' + kind : '');
   $('rbIcon').textContent = icon;
   $('rbTitle').textContent = title;
-  $('rbSub').textContent = sub;
+  $('rbSub').textContent = sub || '';
+  const status = $('rbStatus'), absent = $('rbAbsent');
+  const hasStatus = !!(extra && extra.status);
+  status.textContent = hasStatus ? extra.status : '';
+  status.className = 'sp-chip' + (hasStatus && extra.statusKind ? ' ' + extra.statusKind : '') + (hasStatus ? '' : ' hidden');
+  const hasAbs = !!(extra && typeof extra.absences === 'number');
+  absent.textContent = hasAbs ? (extra.absences === 0 ? 'No absences' : `Absences: ${extra.absences}`) : '';
+  absent.className = 'sp-chip sp-absent' + (hasAbs && extra.absences > 0 ? ' has-absences' : '') + (hasAbs ? '' : ' hidden');
 }
 function resetResultBannerSoon(){
   clearTimeout(resetResultBannerSoon._tm);
   resetResultBannerSoon._tm = setTimeout(()=>{
-    setResultBanner('', '📷', 'Ready to scan', 'Logged entries will appear in the table below');
-  }, 2000);
+    setResultBanner('', '📷', 'Ready to scan', '');
+  }, 15000); // long enough to read the name after the person has stepped away
+}
+
+// How many empty In/Out cells this student has in their group (same rule as the table's Absent column).
+function countAbsencesFor(group, student){
+  let n = 0;
+  (group.dateColumns || []).forEach(label=>{
+    const m = getColumnModes(group, label);
+    const rec = student.attendance[label] || {};
+    if(m.in && !rec.in) n++;
+    if(m.out && !rec.out) n++;
+  });
+  return n;
 }
 
 function handleDecodedText(rawText){
@@ -1818,6 +3087,7 @@ function handleDecodedText(rawText){
 }
 
 async function processScannedCode(rawText){
+  if(!ensureSessionReady(rawText)) return; // pick / confirm a column first
   const id = extractId(rawText);
   const key = normalizeId(id);
   const sessionKey = getSessionLabel();
@@ -1835,7 +3105,7 @@ async function processScannedCode(rawText){
     const student = g.roster.find(s=>s.key===key);
     if(!student){
       beep(320,160); vibrate(120);
-      setResultBanner('unknown', '⚠️', 'ID not in this group', id);
+      setResultBanner('unknown', '⚠️', 'ID not recognized', id, { status:'NOT IN THIS GROUP', statusKind:'bad' });
       openAddModal({ id, name:'', markPresent:true, fromScan:true, forcedGroup: state.lockedGroup });
       return;
     }
@@ -1847,7 +3117,7 @@ async function processScannedCode(rawText){
   const found = findStudentAcrossGroups(key);
   if(!found){
     beep(320,160); vibrate(120);
-    setResultBanner('unknown', '⚠️', 'ID not in any group', id);
+    setResultBanner('unknown', '⚠️', 'ID not recognized', id, { status:'NOT IN ANY GROUP', statusKind:'bad' });
     openAddModal({ id, name:'', markPresent:true, fromScan:true });
     return;
   }
@@ -1864,30 +3134,33 @@ async function processScannedCode(rawText){
 // Sheets-synced — also fires the background sync to the real spreadsheet.
 // This is what makes Sheets sync work correctly even without a device lock.
 function logScanResult(group, groupName, student, sessionKey){
-  const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
-  ensureColumn(sessionKey); // acts on currentGroup(), already pointed at groupName above
+  const eventName = currentEventName();
   if(!student.attendance[sessionKey]) student.attendance[sessionKey] = { in:'', out:'' };
   const rec = student.attendance[sessionKey];
 
   if(rec[scanMode]){
     // Nothing changed -- no need to touch storage, the DOM, or the network.
     beep(520,120); vibrate([30,40,30]);
-    setResultBanner('duplicate', '🔁', `${modeLabel(scanMode)} already logged`, `${student.name || student.id} (${groupName}) — ${rec[scanMode]}`);
+    setResultBanner('duplicate', '🔁', student.name || student.id, `${student.id} · ${groupName}`, { status:`${modeLabel(scanMode).toUpperCase()} ALREADY LOGGED · ${rec[scanMode]}`, statusKind:'dup', absences: countAbsencesFor(group, student) });
     resetResultBannerSoon();
     return;
   }
 
+  // First successful scan of this date/mode — by anyone, in any group — adds the column to EVERY group.
+  const isNewColumn = registerSession(sessionKey, scanMode, eventName);
   const time = formatTime(new Date());
   rec[scanMode] = time;
   saveState();
   if(!updateAttendanceCell(student.key, sessionKey, scanMode, time)) renderTable();
   beep(880,140); vibrate(40);
   const syncTag = group.syncMode === 'sheets' ? ' 🔗' : '';
-  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', `${student.name || student.id} — ${modeLabel(scanMode)}`, `${groupName}${syncTag} · ${student.id} — ${time}`);
+  setResultBanner('success', scanMode==='out' ? '🔴' : '✅', student.name || student.id, `${student.id} · ${groupName}${syncTag}`, { status:`${modeLabel(scanMode).toUpperCase()} · ${time}`, statusKind: scanMode==='out' ? 'out' : 'in', absences: countAbsencesFor(group, student) });
   resetResultBannerSoon();
 
   if(group.syncMode === 'sheets'){
     syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, scanMode, time);
+  } else if(isNewColumn){
+    syncNewColumnToSheets(sessionKey, scanMode, eventName); // keep the Sheet's tabs in step
   }
 }
 
@@ -2009,9 +3282,9 @@ function updateAttendanceCell(studentKey, sessionKey, mode, value){
   cell.classList.toggle('present', !!value);
   cell.classList.toggle('empty-cell', !value);
   if(mode==='out') cell.classList.toggle('out-cell', !!value);
-  cell.classList.toggle('editable-cell', !!value);
-  if(value) cell.title = `Tap to clear this ${mode==='out'?'Time Out':'Time In'} (e.g. if scanned by mistake)`;
-  else cell.removeAttribute('title');
+  cell.classList.add('editable-cell');
+  const modeText = mode==='out' ? 'Time Out' : 'Time In';
+  cell.title = value ? `Tap to edit or clear this ${modeText}` : `Tap to enter a ${modeText} manually`;
   const absentCell = row.querySelector('td.col-absent');
   if(absentCell) setAbsentCell(absentCell, countAbsentInRow(row));
   return true;
@@ -2064,6 +3337,22 @@ function renderCrossGroupResults(search, currentGroupName){
   });
 }
 
+// The "In" / "Out" cell under a date, with its own × that removes just that one column.
+function makeSubHeader(label, mode, otherModeExists){
+  const th = document.createElement('th');
+  th.className = mode === 'out' ? 'sub-out' : 'sub-in';
+  const txt = document.createElement('span'); txt.textContent = mode === 'out' ? 'Out' : 'In';
+  const modeName = mode === 'out' ? 'Time Out' : 'Time In';
+  const x = document.createElement('span'); x.className = 'sub-th-x'; x.textContent = '×';
+  x.title = `Remove only the ${modeName} column`;
+  x.onclick = ()=>{
+    const keep = otherModeExists ? `\n\n${mode === 'out' ? 'Time In' : 'Time Out'} for this day is kept.` : '\n\nThis is the only column for that day, so the whole day is removed.';
+    if(confirm(`Remove only the ${modeName} column for "${label}" from ALL groups?\n\nEvents are shared, so this deletes those ${modeName} times everywhere.${keep}`)) deleteColumnSynced(label, mode);
+  };
+  th.appendChild(txt); if(!isScannerMode()) th.appendChild(x);
+  return th;
+}
+
 function renderTable(){
   const group = currentGroup();
   const roster = group ? group.roster : [];
@@ -2088,10 +3377,9 @@ function renderTable(){
   const colModes = {};
   const visibleDateColumns = [];
   dateColumns.forEach(col=>{
-    const hasIn = roster.some(s=>s.attendance[col] && s.attendance[col].in);
-    const hasOut = roster.some(s=>s.attendance[col] && s.attendance[col].out);
-    if(!hasIn && !hasOut) return; // nothing logged for this date at all -- don't show it
-    colModes[col] = { in: hasIn, out: hasOut };
+    const modes = getColumnModes(group, col);
+    if(!modes.in && !modes.out) return; // no scan has used this date yet
+    colModes[col] = { in: !!modes.in, out: !!modes.out };
     visibleDateColumns.push(col);
   });
 
@@ -2103,13 +3391,13 @@ function renderTable(){
     const txt = document.createElement('span'); txt.textContent = col;
     const x = document.createElement('span'); x.className='date-th-x'; x.textContent='×';
     x.title = 'Remove this column';
-    x.onclick = ()=>{ if(confirm(`Remove the "${col}" column from the log? This deletes those time records.`)) deleteColumnSynced(col); };
-    wrap.appendChild(txt); wrap.appendChild(x);
+    x.onclick = ()=>{ if(confirm(`Remove "${col}" from ALL groups? Events are shared, so this deletes those time records everywhere.`)) deleteColumnSynced(col); };
+    wrap.appendChild(txt); if(!isScannerMode()) wrap.appendChild(x);
     th.appendChild(wrap);
     headRow.appendChild(th);
 
-    if(modes.in){ const thIn = document.createElement('th'); thIn.className='sub-in'; thIn.textContent='In'; subHeadRow.appendChild(thIn); }
-    if(modes.out){ const thOut = document.createElement('th'); thOut.className='sub-out'; thOut.textContent='Out'; subHeadRow.appendChild(thOut); }
+    if(modes.in) subHeadRow.appendChild(makeSubHeader(col, 'in', modes.out));
+    if(modes.out) subHeadRow.appendChild(makeSubHeader(col, 'out', modes.in));
   });
   const thAbsent = document.createElement('th'); thAbsent.className='col-absent'; thAbsent.textContent='Absent'; thAbsent.rowSpan=2;
   thAbsent.title = 'Number of empty time cells for this student (each counts as an absence)';
@@ -2151,29 +3439,17 @@ function renderTable(){
         if(modes.in){
           const tdIn = document.createElement('td'); tdIn.className = 'col-in ' + (rec.in ? 'present' : 'empty-cell'); tdIn.dataset.col = col;
           tdIn.textContent = rec.in || '—';
-          if(rec.in){
-            tdIn.classList.add('editable-cell');
-            tdIn.title = 'Tap to clear this Time In (e.g. if scanned by mistake)';
-            tdIn.onclick = ()=>{
-              if(confirm(`Clear ${s.name || s.id}'s Time In for "${col}" (currently ${rec.in})?\n\nThis can't be undone.`)){
-                clearAttendanceCellSynced(group, s, col, 'in');
-              }
-            };
-          }
+          tdIn.classList.add('editable-cell');
+          tdIn.title = rec.in ? 'Tap to edit or clear this Time In' : 'Tap to enter a Time In manually';
+          tdIn.onclick = ()=> openCellEditor(group, s, col, 'in');
           tr.appendChild(tdIn);
         }
         if(modes.out){
           const tdOut = document.createElement('td'); tdOut.className = 'col-out ' + (rec.out ? 'present out-cell' : 'empty-cell'); tdOut.dataset.col = col;
           tdOut.textContent = rec.out || '—';
-          if(rec.out){
-            tdOut.classList.add('editable-cell');
-            tdOut.title = 'Tap to clear this Time Out (e.g. if scanned by mistake)';
-            tdOut.onclick = ()=>{
-              if(confirm(`Clear ${s.name || s.id}'s Time Out for "${col}" (currently ${rec.out})?\n\nThis can't be undone.`)){
-                clearAttendanceCellSynced(group, s, col, 'out');
-              }
-            };
-          }
+          tdOut.classList.add('editable-cell');
+          tdOut.title = rec.out ? 'Tap to edit or clear this Time Out' : 'Tap to enter a Time Out manually';
+          tdOut.onclick = ()=> openCellEditor(group, s, col, 'out');
           tr.appendChild(tdOut);
         }
       });
@@ -2183,13 +3459,19 @@ function renderTable(){
       tr.appendChild(tdAbsent);
       const tdAct = document.createElement('td'); tdAct.className='col-actions';
       const editBtn = document.createElement('button'); editBtn.className='row-icon-btn'; editBtn.textContent='✎'; editBtn.title='Rename';
-      editBtn.onclick = ()=>{
-        const newName = prompt('Full name', s.name);
-        if(newName !== null){ s.name = newName.trim(); saveState(); renderTable(); }
-      };
+      editBtn.onclick = ()=> renameStudentSynced(group, s);
       const delBtn = document.createElement('button'); delBtn.className='row-icon-btn'; delBtn.textContent='🗑'; delBtn.title='Delete';
-      delBtn.onclick = ()=>{ if(confirm(`Remove ${s.name || s.id} from the roster?`)) deleteStudent(s.key); };
-      tdAct.appendChild(editBtn); tdAct.appendChild(delBtn);
+      delBtn.onclick = ()=>{
+        const extra = (group && group.syncMode === 'sheets') ? '\n\nThis also removes them (and their logged times) from the Google Sheet.' : '';
+        if(confirm(`Remove ${s.name || s.id} from the roster?${extra}`)) deleteStudentSynced(group, s);
+      };
+      tdAct.appendChild(editBtn);
+      if(state.groupOrder.length > 1){
+        const moveBtn = document.createElement('button'); moveBtn.className='row-icon-btn'; moveBtn.textContent='⇄'; moveBtn.title='Move to another group';
+        moveBtn.onclick = ()=> openMoveStudent(group, s);
+        tdAct.appendChild(moveBtn);
+      }
+      tdAct.appendChild(delBtn);
       tr.appendChild(tdAct);
       body.appendChild(tr);
     });
@@ -2274,9 +3556,14 @@ async function confirmAddModal(){
 
   const existingGroup = state.groups[targetGroup];
   const isSheetsTarget = existingGroup && existingGroup.syncMode === 'sheets';
+  if($('modalMarkPresent').checked){
+    const st = sessionStatus();
+    if(st.reason === 'none' || st.reason === 'gone'){ alert('Pick which column to log them into first (tap "Logging into" at the top), or untick the box.'); return; }
+    if(st.reason === 'missing-mode' && isScannerMode()){ alert(`There's no ${modeLabel(scanMode)} column for this session yet — ask the secretary, or untick the box.`); return; }
+  }
   const sessionKey = $('modalMarkPresent').checked ? getSessionLabel() : null;
   const mode = scanMode;
-  const eventName = ($('fileNameInput').value||'').trim() || 'Attendance';
+  const eventName = currentEventName();
   const time = formatTime(new Date());
 
   if(isSheetsTarget){
@@ -2298,7 +3585,9 @@ async function confirmAddModal(){
   createGroup(targetGroup); // creates it if new (local groups only), otherwise just makes it the active group
   const s = addOrUpdateStudent(id, name, null, mode);
   if(sessionKey){
-    ensureColumn(sessionKey);
+    const evName = currentEventName();
+    const isNewColumn = registerSession(sessionKey, mode, evName);
+    if(isNewColumn && !(state.groups[targetGroup] && state.groups[targetGroup].syncMode === 'sheets')) syncNewColumnToSheets(sessionKey, mode, evName);
     if(!s.attendance[sessionKey]) s.attendance[sessionKey] = { in:'', out:'' };
     s.attendance[sessionKey][mode] = time;
     saveState();
@@ -2306,7 +3595,7 @@ async function confirmAddModal(){
   renderTable();
   closeAddModal();
   if(sessionKey){
-    setResultBanner('success', '✅', `${s.name || s.id} — ${modeLabel(mode)}`, `${targetGroup} · ${s.id} — ${s.attendance[sessionKey][mode]}`);
+    setResultBanner('success', mode==='out' ? '🔴' : '✅', s.name || s.id, `${s.id} · ${targetGroup}`, { status:`${modeLabel(mode).toUpperCase()} · ${s.attendance[sessionKey][mode]}`, statusKind: mode==='out' ? 'out' : 'in', absences: countAbsencesFor(state.groups[targetGroup], s) });
     resetResultBannerSoon();
   }
   showToast('Saved');
@@ -2329,10 +3618,9 @@ function buildSheetForGroup(group){
   const colModes = {};
   const visibleDateColumns = [];
   group.dateColumns.forEach(c=>{
-    const hasIn = group.roster.some(s=>s.attendance[c] && s.attendance[c].in);
-    const hasOut = group.roster.some(s=>s.attendance[c] && s.attendance[c].out);
-    if(!hasIn && !hasOut) return;
-    colModes[c] = { in: hasIn, out: hasOut };
+    const modes = getColumnModes(group, c);
+    if(!modes.in && !modes.out) return;
+    colModes[c] = { in: !!modes.in, out: !!modes.out };
     visibleDateColumns.push(c);
   });
 
@@ -2364,27 +3652,31 @@ function buildSheetForGroup(group){
       return row;
     });
 
-  // Title row: sits only above each date's own column(s) (using whichever
-  // event name was active when that date was recorded), not over
-  // Name/Student ID — so a sheet spanning multiple events shows each one
-  // labeled correctly above its own columns instead of one name over everything.
+  // Title row: each date's columns are labeled with the event name that was
+  // active when that date was recorded. Side-by-side columns with the SAME
+  // event name share one merged banner (e.g. "Intramurals Day 1" across AM + PM,
+  // Time In + Time Out) — same as the Google Sheet. Name/Student ID stay blank.
   const eventNames = group.eventNames || {};
+  const colTitles = []; // one entry per date column actually written
+  visibleDateColumns.forEach(c=>{
+    const label = eventNames[c] || 'Attendance';
+    if(colModes[c].in) colTitles.push(label);
+    if(colModes[c].out) colTitles.push(label);
+  });
   const titleRow = [
     { v:'', t:'s', s:blankTitleStyle },
     { v:'', t:'s', s:blankTitleStyle }
   ];
   const merges = [];
-  let colIndex = 2;
-  visibleDateColumns.forEach(c=>{
-    const span = (colModes[c].in && colModes[c].out) ? 2 : 1;
-    const label = eventNames[c] || 'Attendance';
-    titleRow.push({ v:label, t:'s', s:titleStyle });
-    if(span === 2){
-      titleRow.push({ v:'', t:'s', s:titleStyle });
-      merges.push({ s:{r:0,c:colIndex}, e:{r:0,c:colIndex+1} });
-    }
-    colIndex += span;
-  });
+  const sameTitle = (a,b)=> String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+  for(let i = 0; i < colTitles.length; ){
+    let j = i;
+    while(j + 1 < colTitles.length && String(colTitles[i]).trim() !== '' && sameTitle(colTitles[i], colTitles[j+1])) j++;
+    titleRow.push({ v:colTitles[i], t:'s', s:titleStyle });
+    for(let k = i + 1; k <= j; k++) titleRow.push({ v:'', t:'s', s:titleStyle });
+    if(j > i) merges.push({ s:{ r:0, c:2 + i }, e:{ r:0, c:2 + j } });
+    i = j + 1;
+  }
 
   titleRow.push({ v:'', t:'s', s:blankTitleStyle }); // blank above the Absent column, same as Name/Student ID
   const aoa = [titleRow, headerRow, ...dataRows];
@@ -2431,7 +3723,7 @@ function buildWorkbook(){
 function exportXLSX(){
   if(typeof XLSX === 'undefined'){ alert('Spreadsheet library failed to load. Check your internet connection and reload.'); return; }
   const blob = buildXLSXBlob();
-  downloadBlob(blob, sanitizeFilename($('fileNameInput').value) + '.xlsx');
+  downloadBlob(blob, exportBaseName() + '.xlsx');
 }
 function buildXLSXBlob(){
   const wb = buildWorkbook();
@@ -2557,19 +3849,14 @@ function init(){
   setAutoSync(!!settings.autoSync);
 
   $('fileNameInput').value = state.fileName || '';
-  $('sessionLabelInput').value = todayLabel();
 
   $('fileNameInput').addEventListener('input', ()=>{ state.fileName = $('fileNameInput').value; saveState(); });
-  $('sessionLabelInput').addEventListener('input', renderTable);
   $('searchInput').addEventListener('input', renderTable);
 
   $('modeInBtn').addEventListener('click', ()=> setScanMode('in'));
   $('modeOutBtn').addEventListener('click', ()=> setScanMode('out'));
   setScanMode(scanMode);
 
-  $('periodAmBtn').addEventListener('click', ()=> setSessionPeriod('AM'));
-  $('periodPmBtn').addEventListener('click', ()=> setSessionPeriod('PM'));
-  setSessionPeriod(sessionPeriod);
 
   $('startBtn').addEventListener('click', startScanning);
   $('stopBtn').addEventListener('click', stopScanning);
@@ -2669,6 +3956,17 @@ function init(){
   });
   $('exportXlsxBtn').addEventListener('click', exportXLSX);
 
+  $('backupDownloadBtn').addEventListener('click', downloadBackup);
+  $('backupRestoreBtn').addEventListener('click', ()=>{ $('backupFileInput').value = ''; $('backupFileInput').click(); });
+  $('backupFileInput').addEventListener('change', (e)=>{ restoreFromFile(e.target.files && e.target.files[0]); });
+  $('moveStudentCancelBtn').addEventListener('click', closeMoveStudent);
+  $('moveStudentConfirmBtn').addEventListener('click', confirmMoveStudent);
+  $('moveStudentBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='moveStudentBackdrop') closeMoveStudent(); });
+  $('cellEditCancelBtn').addEventListener('click', closeCellEditor);
+  $('cellEditSaveBtn').addEventListener('click', saveCellEdit);
+  $('cellEditClearBtn').addEventListener('click', clearFromCellEditor);
+  $('cellEditBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='cellEditBackdrop') closeCellEditor(); });
+  $('cellEditInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveCellEdit(); } });
   $('modalCancelBtn').addEventListener('click', closeAddModal);
   $('modalConfirmBtn').addEventListener('click', confirmAddModal);
   $('modalBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='modalBackdrop') closeAddModal(); });
@@ -2686,15 +3984,33 @@ function init(){
   }
 
   $('clearDataBtn').addEventListener('click', ()=>{
-    if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device. Continue?')){
+    if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device.\n\nTip: tap "Download backup" first if you might want any of it back. Continue?')){
       state = { fileName:'', scanMode: state.scanMode, sessionPeriod: state.sessionPeriod, groups:{}, groupOrder:[], activeGroupId:null };
       saveState();
       $('fileNameInput').value = '';
-      renderTable();
+      refreshSessionControl();
       showToast('All data cleared');
     }
   });
 
+  $('sessionPickBtn').addEventListener('click', ()=> openSessionPicker());
+  $('sessionPickCloseBtn').addEventListener('click', closeSessionPicker);
+  $('sessionPickBackdrop').addEventListener('click', (e)=>{ if(e.target.id==='sessionPickBackdrop') closeSessionPicker(); });
+  $('sessionNewBtn').addEventListener('click', showNewColumnForm);
+  $('newColBackBtn').addEventListener('click', ()=> showSessionList());
+  $('newColAmBtn').addEventListener('click', ()=> setNewColPeriod('AM'));
+  $('newColPmBtn').addEventListener('click', ()=> setNewColPeriod('PM'));
+  $('newColCreateBtn').addEventListener('click', createNewColumnFromForm);
+  $('sessionRefreshBtn').addEventListener('click', async ()=>{ await refreshSheets(); renderSessionList(); });
+  $('scannerModeCheckbox').addEventListener('change', onScannerModeToggle);
+  $('pinSetBtn').addEventListener('click', setPinFromInput);
+  $('pinClearBtn').addEventListener('click', clearPin);
+  updatePinStatus();
+  refreshSessionControl();
+  updateBackupInfo();
+  try{
+    if(sessionStorage.getItem('qrJustRestored')){ sessionStorage.removeItem('qrJustRestored'); showToast('Backup restored'); if((state.sheetsUrl||'').trim() && getSheetsGroups().length) refreshSheets(); }
+  }catch(e){}
   renderTable();
 }
 
@@ -2704,7 +4020,7 @@ async function shareViaAndroid(){
   try{
     const blob = buildXLSXBlob();
     const base64 = await blobToBase64(blob);
-    const filename = sanitizeFilename($('fileNameInput').value) + '.xlsx';
+    const filename = exportBaseName() + '.xlsx';
     AndroidHost.saveAndShareFile(base64, filename, blob.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   }catch(e){
     console.error(e);
