@@ -259,6 +259,10 @@ header.topbar{
 .si-tag.on{background:var(--primary);color:#fff;}
 .si-tag.off{background:transparent;border:1px dashed var(--border);}
 .si-tag.use{background:var(--ink);color:#fff;}
+.session-item-wrap{display:flex;gap:8px;align-items:stretch;}
+.session-item-wrap .session-item{flex:1;min-width:0;}
+.session-del{flex:0 0 auto;width:46px;border:1px solid #F0C9C6;background:#FDF1F0;color:#C5413B;border-radius:12px;font-size:18px;cursor:pointer;font-family:inherit;}
+.session-del:active{transform:scale(.96);}
 .session-or{text-align:center;font-size:12px;color:var(--muted);margin:2px 0 8px;}
 .scan-mode-toggle{display:flex;gap:8px;margin-bottom:2px;}
 .mode-btn{
@@ -689,6 +693,20 @@ td.col-in,td.col-out{min-width:64px;}
  * app to pick it up. Deleting a group in the app does NOT delete the sheet
  * tab — it only stops tracking it on that device.
  *
+ * ADMIN PASSWORD
+ * The first time the relay runs it creates a hidden tab called &quot;_Settings&quot;.
+ * Cell B1 holds the admin (secretary) password — it starts as uapsa26.
+ * To change it: in Google Sheets open View → Hidden sheets → _Settings and
+ * edit cell B1 (or use &quot;Change password&quot; in the app&#x27;s Settings). Tabs whose
+ * name starts with &quot;_&quot; are never treated as groups. Keep reps as
+ * view-only on the Sheet, because anyone who can edit it can read B1.
+ *
+ * WHAT NEEDS THE PASSWORD
+ * Starting a column, deleting a column, deleting a student and changing the
+ * password. A scan or a manual edit can NEVER create a column: if the column
+ * no longer exists (the secretary deleted it) the write is refused, so old or
+ * offline devices can&#x27;t bring deleted columns back.
+ *
  * UPDATING THIS SCRIPT LATER: after pasting a new version, you must do
  * Deploy → Manage deployments → (pencil icon) → Version: New version →
  * Deploy. Saving alone does not change the live URL.
@@ -697,6 +715,7 @@ td.col-in,td.col-out{min-width:64px;}
 function doGet(e) {
   var action = e.parameter.action;
   if (action === &#x27;snapshot&#x27;) {
+    getSettingsSheet(); // makes sure the hidden _Settings tab (admin password) exists
     return respond(buildSnapshot());
   }
   return respond({ ok: false, error: &#x27;Unknown action: &#x27; + action });
@@ -711,6 +730,13 @@ function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
     var action = payload.action;
+    if (action === &#x27;verifyAdmin&#x27;) return respond(verifyAdminAction(payload));
+    if (action === &#x27;changePassword&#x27;) return respond(changePasswordAction(payload));
+    // Anything that creates or destroys structure needs the admin password.
+    if (action === &#x27;deleteColumn&#x27; || action === &#x27;deleteStudent&#x27; || action === &#x27;ensureColumn&#x27;) {
+      var denied = checkAdmin(payload);
+      if (denied) return respond(denied);
+    }
     if (action === &#x27;logAttendance&#x27;) return respond(logAttendance(payload));
     if (action === &#x27;deleteColumn&#x27;) return respond(deleteColumnAction(payload));
     if (action === &#x27;addStudent&#x27;) return respond(addStudentAction(payload));
@@ -735,6 +761,76 @@ function respond(obj) {
 
 function getSS() {
   return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/* ---------- Admin password + hidden settings tab ---------- */
+var SETTINGS_TAB = &#x27;_Settings&#x27;;
+var DEFAULT_ADMIN_PASSWORD = &#x27;uapsa26&#x27;;
+
+// Tabs starting with &quot;_&quot; are internal (settings) — never groups, never given columns.
+function isDataSheet(sheet) {
+  return sheet.getName().charAt(0) !== &#x27;_&#x27;;
+}
+function dataSheets() {
+  return getSS().getSheets().filter(isDataSheet);
+}
+
+function getSettingsSheet() {
+  var ss = getSS();
+  var sh = ss.getSheetByName(SETTINGS_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(SETTINGS_TAB);
+    sh.getRange(&#x27;A1&#x27;).setValue(&#x27;Admin password&#x27;).setFontWeight(&#x27;bold&#x27;);
+    sh.getRange(&#x27;B1&#x27;).setNumberFormat(&#x27;@&#x27;).setValue(DEFAULT_ADMIN_PASSWORD);
+    sh.getRange(&#x27;A3&#x27;).setValue(&#x27;Edit cell B1 to change the admin (secretary) password. Do not rename or delete this tab.&#x27;);
+    sh.setColumnWidth(1, 160);
+    sh.setColumnWidth(2, 240);
+    try {
+      var first = dataSheets()[0];
+      if (first) ss.setActiveSheet(first);
+      sh.hideSheet();
+    } catch (err) { /* if it can&#x27;t be hidden it still works */ }
+  }
+  return sh;
+}
+
+function getAdminPassword() {
+  var v = String(getSettingsSheet().getRange(&#x27;B1&#x27;).getDisplayValue()).trim();
+  return v || DEFAULT_ADMIN_PASSWORD;
+}
+
+// Brute-force guard: 10 wrong passwords locks admin actions for ~10 minutes.
+function adminLockedOut() {
+  return Number(CacheService.getScriptCache().get(&#x27;adminFails&#x27;) || 0) &gt;= 10;
+}
+
+// Returns null when the password in `p.adminPassword` is right, else an error object to send back.
+function checkAdmin(p) {
+  if (adminLockedOut()) {
+    return { ok: false, code: &#x27;locked-out&#x27;, error: &#x27;Too many wrong passwords. Try again in about 10 minutes.&#x27; };
+  }
+  var given = String(p.adminPassword === undefined || p.adminPassword === null ? &#x27;&#x27; : p.adminPassword).trim();
+  if (!given) return { ok: false, code: &#x27;admin-required&#x27;, error: &#x27;The admin password is needed for this.&#x27; };
+  if (given !== getAdminPassword()) {
+    var cache = CacheService.getScriptCache();
+    cache.put(&#x27;adminFails&#x27;, String(Number(cache.get(&#x27;adminFails&#x27;) || 0) + 1), 600);
+    return { ok: false, code: &#x27;bad-password&#x27;, error: &#x27;That admin password is not right.&#x27; };
+  }
+  CacheService.getScriptCache().remove(&#x27;adminFails&#x27;);
+  return null;
+}
+
+function verifyAdminAction(p) {
+  return checkAdmin(p) || { ok: true };
+}
+
+function changePasswordAction(p) {
+  var denied = checkAdmin(p);
+  if (denied) return denied;
+  var next = String(p.newPassword || &#x27;&#x27;).trim();
+  if (next.length &lt; 6) return { ok: false, code: &#x27;weak-password&#x27;, error: &#x27;Use at least 6 characters.&#x27; };
+  getSettingsSheet().getRange(&#x27;B1&#x27;).setNumberFormat(&#x27;@&#x27;).setValue(next);
+  return { ok: true };
 }
 
 /* ---------- Colors (matches the app&#x27;s local Excel export exactly) ---------- */
@@ -907,7 +1003,7 @@ function ensureDateColumn(sheet, sessionLabel, mode, eventName) {
 
 // Gives EVERY tab this date/mode column (no-op for tabs that already have it).
 function ensureColumnInAllTabs(sessionLabel, mode, eventName) {
-  getSS().getSheets().forEach(function (sheet) {
+  dataSheets().forEach(function (sheet) {
     ensureDateColumn(sheet, sessionLabel, mode, eventName);
   });
 }
@@ -924,21 +1020,38 @@ function findStudentRow(sheet, studentId) {
 
 /* ---------- Actions ---------- */
 
-// Finds (creating if needed) the column for this date/mode and the student&#x27;s
-// row. Shared by scanning and by manual edits.
+// Finds the column for this date/mode and the student&#x27;s row. A scan or a manual
+// edit never creates a brand-new column: if no tab has it any more (the secretary
+// deleted it) we refuse, so stale devices can&#x27;t resurrect deleted columns. A tab
+// that is merely missing a column the other tabs already have gets it added.
+function findColumnElsewhere(label, suffix) {
+  var sheets = dataSheets();
+  for (var i = 0; i &lt; sheets.length; i++) {
+    var other = sheets[i];
+    if (other.getLastRow() &lt; 2) continue;
+    var idx = findDateColIndex(getHeaderRow(other), label, suffix);
+    if (idx !== -1) {
+      var titles = readTitles(other, Math.max(other.getLastColumn(), idx));
+      return { eventName: titles[idx - 1] || &#x27;Attendance&#x27; };
+    }
+  }
+  return null;
+}
+
 function locateCell(p) {
   var sheet = getSS().getSheetByName(p.group);
-  if (!sheet) return { error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  if (!sheet || !isDataSheet(sheet)) return { error: &#x27;No tab named &quot;&#x27; + p.group + &#x27;&quot; in this sheet.&#x27; };
+  ensureHeaderRows(sheet);
 
-  var colInfo = ensureDateColumn(sheet, p.sessionLabel, p.mode, p.eventName);
-  if (colInfo.created) {
-    // First time this date/mode is used: every other tab gets the same column,
-    // so all groups end up with the same set of events.
-    getSS().getSheets().forEach(function (other) {
-      if (other.getName() !== sheet.getName()) {
-        ensureDateColumn(other, p.sessionLabel, p.mode, p.eventName);
-      }
-    });
+  var suffix = (p.mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
+  var col = findDateColIndex(getHeaderRow(sheet), p.sessionLabel, suffix);
+  if (col === -1) {
+    var elsewhere = findColumnElsewhere(p.sessionLabel, suffix);
+    if (!elsewhere) {
+      return { error: &#x27;That column was deleted from the Sheet.&#x27;, code: &#x27;column-missing&#x27; };
+    }
+    col = createDateColumn(sheet, p.sessionLabel, p.mode, elsewhere.eventName);
+    mergeEventTitles(sheet);
   }
 
   var row = findStudentRow(sheet, p.studentId);
@@ -949,7 +1062,7 @@ function locateCell(p) {
   } else if (p.studentName) {
     sheet.getRange(row, 1).setValue(p.studentName);
   }
-  return { sheet: sheet, row: row, col: colInfo.col };
+  return { sheet: sheet, row: row, col: col };
 }
 
 // Plain-text format FIRST, so Sheets keeps &quot;5:28 PM&quot; as text instead of
@@ -965,7 +1078,7 @@ function writeTime(cell, mode, time) {
 
 function logAttendance(p) {
   var loc = locateCell(p);
-  if (loc.error) return { ok: false, error: loc.error };
+  if (loc.error) return { ok: false, error: loc.error, code: loc.code };
 
   var cell = loc.sheet.getRange(loc.row, loc.col);
   var existing = normalizeTimeText(cell.getDisplayValue());
@@ -980,7 +1093,7 @@ function logAttendance(p) {
 // already in the cell.
 function setCellAction(p) {
   var loc = locateCell(p);
-  if (loc.error) return { ok: false, error: loc.error };
+  if (loc.error) return { ok: false, error: loc.error, code: loc.code };
   writeTime(loc.sheet.getRange(loc.row, loc.col), p.mode, p.time);
   return { ok: true };
 }
@@ -1002,7 +1115,7 @@ function clearCellAction(p) {
   var headerRow = getHeaderRow(sheet);
   var suffix = (p.mode === &#x27;out&#x27;) ? &#x27;Time Out&#x27; : &#x27;Time In&#x27;;
   var targetCol = findDateColIndex(headerRow, p.sessionLabel, suffix);
-  if (targetCol === -1) return { ok: false, error: &#x27;That date column was not found.&#x27; };
+  if (targetCol === -1) return { ok: false, error: &#x27;That date column was not found.&#x27;, code: &#x27;column-missing&#x27; };
 
   var row = findStudentRow(sheet, p.studentId);
   if (row === -1) return { ok: false, error: &#x27;That student was not found in this group.&#x27; };
@@ -1011,6 +1124,7 @@ function clearCellAction(p) {
   return { ok: true };
 }
 
+// (Admin password required — checked in doPost.)
 // Deletes whichever column(s) exist for this date — just Time In, just Time
 // Out, or both if both were ever used (or only the one named in p.mode). Higher column index is deleted first
 // so removing one doesn&#x27;t shift the other&#x27;s position before it&#x27;s handled.
@@ -1018,7 +1132,7 @@ function deleteColumnAction(p) {
   // p.mode = &#x27;in&#x27; or &#x27;out&#x27; removes just that one column; leave it out to remove both.
   var onlyMode = (p.mode === &#x27;in&#x27; || p.mode === &#x27;out&#x27;) ? p.mode : null;
   var deletedAny = false;
-  getSS().getSheets().forEach(function (sheet) {
+  dataSheets().forEach(function (sheet) {
     if (sheet.getLastRow() &lt; 2) return;
     var headerRow = getHeaderRow(sheet);
     var inCol = (onlyMode === &#x27;out&#x27;) ? -1 : findDateColIndex(headerRow, p.sessionLabel, &#x27;Time In&#x27;);
@@ -1030,19 +1144,21 @@ function deleteColumnAction(p) {
     cols.forEach(function (c) { sheet.deleteColumn(c); deletedAny = true; });
     mergeEventTitles(sheet);
   });
-  if (!deletedAny) return { ok: false, error: &#x27;That date column was not found.&#x27; };
-  return { ok: true };
+  // Already gone from the Sheet is fine — the app can finish removing it on its side.
+  return { ok: true, alreadyGone: !deletedAny };
 }
 
+// (Admin password required — checked in doPost.)
 function ensureColumnAction(p) {
   ensureColumnInAllTabs(p.sessionLabel, p.mode, p.eventName);
   return { ok: true };
 }
 
-// Makes every tab have the same columns: the union of what the app sends plus
-// whatever any tab already has. Used when a tab is added later.
+// Makes every tab have the same columns: the union of what the tabs ALREADY have.
+// Used when a tab is added later. It deliberately ignores any column list sent
+// by a device, so a stale device can&#x27;t bring back a column that was deleted.
 function syncColumnsAction(p) {
-  var sheets = getSS().getSheets();
+  var sheets = dataSheets();
   var union = [];
   var seen = {};
   function add(label, mode, eventName) {
@@ -1051,7 +1167,6 @@ function syncColumnsAction(p) {
     seen[key] = true;
     union.push({ label: label, mode: mode, eventName: eventName || &#x27;Attendance&#x27; });
   }
-  (p.columns || []).forEach(function (c) { add(c.label, c.mode === &#x27;out&#x27; ? &#x27;out&#x27; : &#x27;in&#x27;, c.eventName); });
   sheets.forEach(function (sheet) {
     var lastCol = sheet.getLastColumn();
     if (sheet.getLastRow() &lt; 2 || lastCol &lt; 3) return;
@@ -1139,7 +1254,7 @@ function addStudentAction(p) {
 // only a Time Out column, or both — in any order. Everything is read as
 // DISPLAYED text, so no raw Date objects can leak into the JSON.
 function buildSnapshot() {
-  var sheets = getSS().getSheets();
+  var sheets = dataSheets();
   var groups = {};
 
   sheets.forEach(function (sheet) {
@@ -1207,7 +1322,8 @@ function buildSnapshot() {
         <li>Click <strong>Deploy</strong>, then approve the authorization prompt (it's your own script acting on your own Sheet).</li>
         <li>Copy the <strong>Web app URL</strong> it gives you (ends in <code>/exec</code>) and paste it above.</li>
       </ol>
-      <p class="help-text">Each worksheet tab in that Sheet becomes a group here, automatically. If you ever edit the script, you'll need <strong>Deploy → Manage deployments → edit → New version → Deploy</strong> to push the change live — saving the code alone isn't enough.</p>
+      <p class="help-text">The script also creates a hidden tab called <strong>_Settings</strong> that holds the admin password (cell B1, starts as <code>uapsa26</code>). To see it in Sheets: View → Hidden sheets → _Settings. Tabs starting with an underscore are never treated as groups.</p>
+    <p class="help-text">Each worksheet tab in that Sheet becomes a group here, automatically. If you ever edit the script, you'll need <strong>Deploy → Manage deployments → edit → New version → Deploy</strong> to push the change live — saving the code alone isn't enough.</p>
     </details>
     <div class="btn-row" style="margin-top:8px;">
       <button class="btn btn-ghost" id="sheetsConnectBtn" style="flex:1">Connect</button>
@@ -1238,13 +1354,13 @@ function buildSnapshot() {
       <input type="checkbox" id="scannerModeCheckbox">
       <label for="scannerModeCheckbox">Scanner mode</label>
     </div>
-    <p class="help-text">For year-level representatives: this device can only log into columns the secretary already started &mdash; it can&rsquo;t start new ones or delete columns, so the Sheet stays tidy. Leave it off on the secretary&rsquo;s device.</p>
-    <div class="btn-row" style="margin-top:8px;align-items:center;">
-      <input type="password" inputmode="numeric" id="pinInput" placeholder="PIN (4&ndash;8 digits)" autocomplete="off" style="flex:1;min-width:120px;">
-      <button type="button" class="btn btn-ghost" id="pinSetBtn">Set PIN</button>
-      <button type="button" class="btn btn-ghost hidden" id="pinClearBtn">Remove</button>
-    </div>
-    <p class="help-text" id="pinStatus"></p>
+    <p class="help-text">For year-level representatives: this device can only log into columns the secretary already started &mdash; it can&rsquo;t start new ones or delete columns, so the Sheet stays tidy. The app always opens in Scanner mode; the secretary enters the admin password to turn it off.</p>
+    <label style="margin-top:14px;display:block;">Admin password</label>
+    <p class="help-text">Needed to turn Scanner mode off, start or delete columns, delete students and clear data. It is stored in your Google Sheet (hidden tab <strong>_Settings</strong>, cell B1), so every device shares it — you can also change it there.</p>
+    <input type="password" id="adminCurrentInput" placeholder="Current password" autocomplete="off" style="margin-top:6px;">
+    <input type="password" id="adminNewInput" placeholder="New password (6+ characters)" autocomplete="off" style="margin-top:8px;">
+    <button type="button" class="btn btn-ghost btn-block" id="adminChangeBtn" style="margin-top:8px;">Change password</button>
+    <p class="help-text" id="adminStatus"></p>
   </div>
   <div class="divider"></div>
 
@@ -1368,6 +1484,8 @@ function buildSnapshot() {
       <div class="session-or">or</div>
       <button type="button" class="btn btn-ghost btn-block" id="sessionNewBtn">➕ Start a new column…</button>
       <p class="help-text" id="sessionNewLocked"></p>
+      <button type="button" class="btn btn-ghost btn-block hidden" id="sessionUnlockBtn" style="margin-top:6px;">🔓 Unlock secretary mode…</button>
+      <button type="button" class="btn btn-ghost btn-block hidden" id="sessionCleanBtn" style="margin-top:6px;">🧹 Clean up empty columns…</button>
       <div class="btn-row" style="margin-top:10px;">
         <button type="button" class="btn btn-ghost hidden" id="sessionRefreshBtn" style="flex:1">↻ Refresh list</button>
         <button type="button" class="btn btn-ghost" id="sessionPickCloseBtn" style="flex:1">Close</button>
@@ -1395,6 +1513,21 @@ function buildSnapshot() {
         <button type="button" class="btn btn-ghost" id="newColBackBtn" style="flex:1">Back</button>
         <button type="button" class="btn btn-primary" id="newColCreateBtn" style="flex:2">Create &amp; use</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin password prompt -->
+<div class="modal-backdrop" id="adminBackdrop">
+  <div class="modal">
+    <h3>Admin password</h3>
+    <p class="sub" id="adminSub"></p>
+    <div class="field">
+      <input type="password" id="adminPwInput" placeholder="Password" autocomplete="off">
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="adminCancelBtn" style="flex:1">Cancel</button>
+      <button type="button" class="btn btn-primary" id="adminOkBtn" style="flex:1">Unlock</button>
     </div>
   </div>
 </div>
@@ -1478,7 +1611,7 @@ const STORAGE_KEY = 'qrAttendanceApp_v1';
 // Bump this string whenever this file changes — visible at the bottom of the
 // Settings drawer, so you can always confirm the latest file actually made it
 // into the build instead of guessing.
-const BUILD_TAG = 'session-picker-2026-08-21';
+const BUILD_TAG = 'admin-lock-2026-11-17';
 const SETTINGS_KEY = 'qrAttendanceApp_settings_v1';
 let isRestoring = false; // set while a backup is being restored, so no stray save can overwrite it
 
@@ -1529,6 +1662,7 @@ function saveSettings(){
 
 let state = loadState();
 let settings = loadSettings();
+settings.scannerMode = true; // the app ALWAYS opens in Scanner mode; the secretary unlocks it with the admin password
 
 // Migrate the old single-flat-roster shape into the new multi-group shape
 // (each group is its own independent roster + date columns; on export, each
@@ -1695,6 +1829,14 @@ function getSheetsGroups(){
   return state.groupOrder.filter(name => state.groups[name] && state.groups[name].syncMode === 'sheets');
 }
 
+// Admin password for this tab/session only (never saved to disk). While it is set the
+// app sends it along with requests, which is what lets a secretary start/delete columns.
+let adminSecret = null;
+let adminUnlockAt = 0;
+let adminPrevModalOpen = false;
+let adminAskResolve = null;
+const DEFAULT_ADMIN_HASH = '25lvk4nydh7'; // offline fallback only; the real password lives in the Sheet
+
 async function sheetsFetchSnapshot(){
   const url = (state.sheetsUrl||'').trim();
   if(!url) throw new Error('No Sheets URL configured');
@@ -1708,14 +1850,21 @@ async function sheetsFetchSnapshot(){
 async function sheetsPost(payload){
   const url = (state.sheetsUrl||'').trim();
   if(!url) throw new Error('No Sheets URL configured');
+  // The admin password rides along only while this device is unlocked (an explicit one in `payload` wins).
+  const body = Object.assign({ adminPassword: adminUnlocked() ? adminSecret : undefined }, payload);
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(body)
   });
   if(!res.ok) throw new Error(`Sheet request failed (${res.status})`);
   const data = await res.json();
-  if(!data.ok) throw new Error(data.error || 'Sheet request failed');
+  if(!data.ok){
+    const err = new Error(data.error || 'Sheet request failed');
+    err.code = data.code || '';
+    if(err.code === 'bad-password') adminSecret = null; // the password was changed — ask again next time
+    throw err;
+  }
   return data;
 }
 
@@ -1732,6 +1881,7 @@ function applySheetsSnapshot(groups){
     if(!state.groupOrder.includes(name)) state.groupOrder.push(name);
   });
   if(!state.activeGroupId && state.groupOrder.length) state.activeGroupId = state.groupOrder[0];
+  pruneStaleLocalColumns();
   const needsSheetSync = sheetsTabsMissingColumns();
   reconcileSessions();
   saveState();
@@ -1759,7 +1909,7 @@ async function connectSheets(){
 }
 
 async function refreshSheets(){
-  if(!(state.sheetsUrl||'').trim()){ alert('Connect a Google Sheet first.'); return; }
+  if(!(state.sheetsUrl||'').trim()){ alert('Connect a Google Sheet first.'); return false; }
   $('sheetsStatusText').textContent = 'Refreshing…';
   try{
     const groups = await sheetsFetchSnapshot();
@@ -1768,9 +1918,11 @@ async function refreshSheets(){
     renderLockedGroupSelect();
     renderTable();
     showToast('Refreshed from Google Sheet');
+    return true;
   }catch(err){
     console.error(err);
     $('sheetsStatusText').textContent = `Could not refresh: ${err.message}`;
+    return false;
   }
 }
 
@@ -1832,8 +1984,23 @@ function updateLockedGroupIndicator(){
    the next person. If a write fails (offline, Sheet busy, etc.) it's queued
    and retried automatically every 15s without the user having to do anything. */
 
-async function syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, mode, time){
+// A column this device still remembered was deleted from the Sheet by the secretary: forget it here too.
+let columnGoneToastAt = 0;
+function noteColumnGone(label){
+  deleteColumn(label);
+  if(Date.now() - columnGoneToastAt > 4000){
+    columnGoneToastAt = Date.now();
+    showToast('That column was deleted by the secretary — scans for it were not saved. Pick a column again.');
+  }
+}
+
+async function syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, mode, time, columnReady = true){
   const payload = { action:'logAttendance', group: groupName, studentId: student.id, studentName: student.name, sessionLabel: sessionKey, eventName, mode, time };
+  if(!columnReady){ // the Sheet doesn't have this new column yet — keep the scan queued behind it
+    queuePendingSync(payload);
+    showToast(`⚠️ ${student.name || student.id} will sync once the column is created`);
+    return;
+  }
   try{
     const res = await sheetsPost(payload);
     if(res.duplicate && res.existing && res.existing !== time){
@@ -1850,6 +2017,7 @@ async function syncLogAttendanceInBackground(groupName, student, sessionKey, eve
       }
     }
   }catch(err){
+    if(err.code === 'column-missing'){ noteColumnGone(sessionKey); return; }
     console.error('Background sync failed, queued for retry:', err);
     queuePendingSync(payload);
     showToast(`⚠️ Could not sync ${student.name || student.id} to the Sheet — will retry`);
@@ -1898,12 +2066,22 @@ async function retryPendingSyncs(){
   if(!Array.isArray(state.pendingSync) || state.pendingSync.length === 0) return;
   if(!(state.sheetsUrl||'').trim()) return;
   const queue = state.pendingSync.slice();
+  const blocked = new Set(); // "label|mode" columns still waiting for the admin to unlock and create them
   for(const payload of queue){
+    const key = payload.sessionLabel + '|' + payload.mode;
+    if(payload.action !== 'ensureColumn' && blocked.has(key)) continue; // keep order: the column isn't there yet
     try{
       await sheetsPost(payload);
       removePendingSync(payload);
     }catch(err){
-      console.error('Retry still failing, will try again later:', err);
+      if(err.code === 'column-missing'){
+        removePendingSync(payload);
+        noteColumnGone(payload.sessionLabel);
+      }else if(err.code === 'admin-required' || err.code === 'bad-password' || err.code === 'locked-out'){
+        if(payload.action === 'ensureColumn') blocked.add(key); // stays queued until the secretary unlocks
+      }else{
+        console.error('Retry still failing, will try again later:', err);
+      }
     }
   }
 }
@@ -1954,9 +2132,9 @@ function getColumnModes(group, label){
 }
 
 // Union of every date/mode column that exists in any group.
-function computeSessionUnion(){
+function computeSessionUnion(groupNames){
   const order = [], modes = {}, names = {};
-  state.groupOrder.forEach(gn=>{
+  (groupNames || state.groupOrder).forEach(gn=>{
     const g = state.groups[gn]; if(!g) return;
     ensureSessionFields(g);
     (g.dateColumns||[]).forEach(label=>{
@@ -2004,9 +2182,31 @@ function sheetsConfigured(){
   return !!((state.sheetsUrl||'').trim()) && getSheetsGroups().length > 0;
 }
 
-// True if some Sheets tab is missing a column that exists in another group.
+// The Sheet is the source of truth. A local-only group on this device may still remember a
+// column that was deleted from the Sheet; if it has no times logged and nothing is waiting
+// to create it, forget it — otherwise it would be pushed back into every Sheet tab.
+function pruneStaleLocalColumns(){
+  const sheetGroups = getSheetsGroups();
+  if(sheetGroups.length === 0) return;
+  const known = new Set();
+  sheetGroups.forEach(gn=>(state.groups[gn].dateColumns||[]).forEach(l=>known.add(l)));
+  const pendingEnsure = new Set((state.pendingSync||[]).filter(p=>p.action==='ensureColumn').map(p=>p.sessionLabel));
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g || g.syncMode === 'sheets') return;
+    ensureSessionFields(g);
+    g.dateColumns = (g.dateColumns||[]).filter(label=>{
+      if(known.has(label) || pendingEnsure.has(label)) return true;
+      const hasData = (g.roster||[]).some(st=>st.attendance && st.attendance[label] && (st.attendance[label].in || st.attendance[label].out));
+      if(hasData) return true;
+      delete g.columnModes[label]; delete g.eventNames[label];
+      return false;
+    });
+  });
+}
+
+// True if some Sheets tab is missing a column that exists in another Sheets tab.
 function sheetsTabsMissingColumns(){
-  const { order, modes } = computeSessionUnion();
+  const { order, modes } = computeSessionUnion(getSheetsGroups());
   return getSheetsGroups().some(gn=>{
     const g = state.groups[gn];
     return order.some(label=>{
@@ -2017,25 +2217,26 @@ function sheetsTabsMissingColumns(){
 }
 
 // A scan in a LOCAL group created a new column: make the Sheet's tabs match.
-function syncNewColumnToSheets(label, mode, eventName){
-  if(!sheetsConfigured()) return;
+// Returns true when the Sheet has the column now (or there is no Sheet), false if it was queued for retry.
+async function syncNewColumnToSheets(label, mode, eventName){
+  if(!sheetsConfigured()) return true;
   const payload = { action:'ensureColumn', sessionLabel:label, mode, eventName };
-  sheetsPost(payload).catch(err=>{
+  try{
+    await sheetsPost(payload);
+    return true;
+  }catch(err){
     console.error('Column sync failed, queued for retry:', err);
     queuePendingSync(payload);
-  });
+    return false;
+  }
 }
 
 // Pushes the full set of columns so every Sheet tab has all of them.
+// (The relay only evens out what its tabs already have — it ignores column lists from devices,
+// so a stale device can never bring a deleted column back.)
 function syncColumnsToSheetsInBackground(){
   if(!sheetsConfigured()) return;
-  const { order, modes, names } = computeSessionUnion();
-  const columns = [];
-  order.forEach(label=>{
-    if(modes[label].in) columns.push({ label, mode:'in', eventName: names[label] || 'Attendance' });
-    if(modes[label].out) columns.push({ label, mode:'out', eventName: names[label] || 'Attendance' });
-  });
-  sheetsPost({ action:'syncColumns', columns }).catch(err=>console.warn('Column sync failed:', err));
+  sheetsPost({ action:'syncColumns' }).catch(err=>console.warn('Column sync failed:', err));
 }
 
 // Columns for one tab of a Sheets snapshot (older relay scripts don't send modes).
@@ -2183,7 +2384,7 @@ function formatDateLabel(dateStr){ // "2026-10-20" -> "Oct 20, 2026" (same style
 }
 function isTodayLabel(label){ return String(label).startsWith(todayLabel() + ' ('); }
 
-// --- PIN: a casual guard so a representative can't just untick Scanner mode (not real security) ---
+// --- Admin password: the secretary's key. The real password lives in the Google Sheet (hidden tab _Settings, B1). ---
 function hashPin(pin){
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   const str = 'qra:' + String(pin);
@@ -2196,50 +2397,101 @@ function hashPin(pin){
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
-function pinIsSet(){ return !!settings.pinHash; }
-function askForPin(message){ // 'ok' | 'wrong' | 'cancel'
-  const v = prompt(message);
-  if(v === null) return 'cancel';
-  return hashPin(v.trim()) === settings.pinHash ? 'ok' : 'wrong';
+// Unlocked = we hold the password. In secretary mode that lasts until Scanner mode is switched back on;
+// in Scanner mode a one-off unlock (e.g. to delete a column) expires after 2 minutes.
+function adminUnlocked(){
+  return adminSecret !== null && (!isScannerMode() || (Date.now() - adminUnlockAt) < 120000);
 }
-function updatePinStatus(){
-  $('pinStatus').textContent = pinIsSet()
-    ? 'A PIN is set — it is needed to turn Scanner mode off, change the PIN, or remove it.'
-    : 'No PIN set — anyone can switch Scanner mode off in Settings.';
-  $('pinClearBtn').classList.toggle('hidden', !pinIsSet());
+function askAdminPassword(message){
+  return new Promise(resolve=>{
+    adminAskResolve = resolve;
+    $('adminSub').textContent = message || 'Enter the admin password.';
+    $('adminPwInput').value = '';
+    adminPrevModalOpen = modalOpen; modalOpen = true; // pause scanning while typing
+    $('adminBackdrop').classList.add('open');
+    setTimeout(()=>$('adminPwInput').focus(), 50);
+  });
 }
-function onScannerModeToggle(e){
-  const wantOn = e.target.checked;
-  if(!wantOn && pinIsSet()){
-    const r = askForPin('Enter the secretary PIN to turn Scanner mode off');
-    if(r !== 'ok'){ e.target.checked = true; if(r === 'wrong') alert('That PIN is not right.'); return; }
+function closeAdminAsk(value){
+  $('adminBackdrop').classList.remove('open');
+  modalOpen = adminPrevModalOpen;
+  const r = adminAskResolve; adminAskResolve = null;
+  if(r) r(value);
+}
+// 'ok' | 'wrong' | 'locked'
+async function checkAdminPassword(pw){
+  if((state.sheetsUrl||'').trim()){
+    try{
+      await sheetsPost({ action:'verifyAdmin', adminPassword: pw });
+      settings.adminHash = hashPin(pw); saveSettings(); // lets this device work offline later
+      return 'ok';
+    }catch(err){
+      if(err.code === 'bad-password') return 'wrong';
+      if(err.code === 'locked-out') return 'locked';
+      // anything else = couldn't reach the Sheet: fall back to the last password this device saw
+    }
   }
-  settings.scannerMode = wantOn;
+  return hashPin(pw) === (settings.adminHash || DEFAULT_ADMIN_HASH) ? 'ok' : 'wrong';
+}
+async function requireAdmin(message){
+  if(adminUnlocked()){ adminUnlockAt = Date.now(); return true; }
+  let msg = message;
+  for(let tries = 0; tries < 3; tries++){
+    const pw = await askAdminPassword(msg);
+    if(pw === null) return false;
+    const r = await checkAdminPassword(pw);
+    if(r === 'ok'){ adminSecret = pw; adminUnlockAt = Date.now(); return true; }
+    if(r === 'locked'){ alert('Too many wrong passwords. Wait about 10 minutes and try again.'); return false; }
+    msg = 'That password is not right. Try again.';
+  }
+  return false;
+}
+// Sends something the relay only accepts from the admin, asking for the password if needed.
+async function postAdmin(payload){
+  for(let attempt = 0; attempt < 2; attempt++){
+    const ok = await requireAdmin(attempt ? 'The password was changed — enter the current admin password' : 'Enter the admin password to continue');
+    if(!ok) throw Object.assign(new Error('Cancelled'), { code:'cancelled' });
+    try{ return await sheetsPost(payload); }
+    catch(err){ if(attempt === 0 && (err.code === 'bad-password' || err.code === 'admin-required')) continue; throw err; }
+  }
+}
+function updateAdminStatus(){
+  const el = $('adminStatus'); if(!el) return;
+  el.textContent = (state.sheetsUrl||'').trim()
+    ? 'Stored in your Google Sheet (hidden tab _Settings, cell B1).'
+    : 'Not connected to a Google Sheet yet — the default password works on this device until you connect one.';
+}
+function applyScannerMode(on){
+  settings.scannerMode = on;
+  if(on) adminSecret = null; else adminUnlockAt = Date.now();
   saveSettings();
   refreshSessionControl();
-  showToast(wantOn ? 'Scanner mode on' : 'Secretary mode on');
+  showToast(on ? 'Scanner mode on' : 'Secretary mode on');
 }
-function setPinFromInput(){
-  const v = $('pinInput').value.trim();
-  if(!/^\d{4,8}$/.test(v)){ alert('Use 4 to 8 digits for the PIN.'); return; }
-  if(pinIsSet()){
-    const r = askForPin('Enter the CURRENT PIN to change it');
-    if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
+async function onScannerModeToggle(e){
+  const wantOn = e.target.checked;
+  if(!wantOn){
+    e.target.checked = true; // stays on until the password is accepted
+    if(!(await requireAdmin('Enter the admin password to turn Scanner mode off'))) return;
   }
-  settings.pinHash = hashPin(v);
-  saveSettings();
-  $('pinInput').value = '';
-  updatePinStatus();
-  showToast('PIN saved');
+  applyScannerMode(wantOn);
 }
-function clearPin(){
-  if(!pinIsSet()) return;
-  const r = askForPin('Enter the current PIN to remove it');
-  if(r !== 'ok'){ if(r === 'wrong') alert('That PIN is not right.'); return; }
-  delete settings.pinHash;
-  saveSettings();
-  updatePinStatus();
-  showToast('PIN removed');
+async function changeAdminPassword(){
+  const cur = $('adminCurrentInput').value.trim();
+  const next = $('adminNewInput').value.trim();
+  if(!(state.sheetsUrl||'').trim()){ alert('Connect your Google Sheet first — the admin password is stored there so every device shares it.'); return; }
+  if(!cur){ alert('Enter the current password.'); return; }
+  if(next.length < 6){ alert('Use at least 6 characters for the new password.'); return; }
+  try{
+    await sheetsPost({ action:'changePassword', adminPassword: cur, newPassword: next });
+  }catch(err){
+    alert(err.code === 'bad-password' ? 'The current password is not right.' : 'Could not change it: ' + err.message);
+    return;
+  }
+  settings.adminHash = hashPin(next); saveSettings();
+  if(adminSecret !== null){ adminSecret = next; adminUnlockAt = Date.now(); }
+  $('adminCurrentInput').value = ''; $('adminNewInput').value = '';
+  showToast('Admin password changed');
 }
 
 // --- the picked column ---
@@ -2259,7 +2511,7 @@ function renderSessionControl(){
   $('sessionPickEvent').textContent = c ? c.eventName : 'No column picked yet';
   $('sessionPickLabel').textContent = c ? c.label : 'Tap to pick one or start a new one';
   $('sessionRoleText').textContent = isScannerMode()
-    ? '🔒 Scanner mode — pick a column the secretary already started.'
+    ? '🔒 Scanner mode — pick a column the secretary already started. (Secretary: unlock with the admin password.)'
     : 'Secretary mode — you can start new columns.';
   $('scannerModeCheckbox').checked = isScannerMode();
   updateModalMarkPresentLabel();
@@ -2328,6 +2580,7 @@ function renderSessionList(){
   items.sort((a,b)=> (isTodayLabel(b) ? 1 : 0) - (isTodayLabel(a) ? 1 : 0)); // today's first
   $('sessionPickEmpty').classList.toggle('hidden', items.length > 0);
   items.forEach(label=>{
+    const wrap = document.createElement('div'); wrap.className = 'session-item-wrap';
     const btn = document.createElement('button');
     btn.type = 'button';
     const isCur = !!(state.currentSession && state.currentSession.label === label);
@@ -2342,12 +2595,74 @@ function renderSessionList(){
     if(isCur) tag('IN USE', 'use');
     btn.appendChild(ev); btn.appendChild(lb); btn.appendChild(tags);
     btn.onclick = ()=> chooseSession(label);
-    list.appendChild(btn);
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'session-del'; del.textContent = '🗑';
+    del.title = 'Delete this column'; del.setAttribute('aria-label', `Delete ${names[label] || 'Attendance'} ${label}`);
+    del.onclick = (e)=>{ e.stopPropagation(); deleteSessionFromPicker(label); };
+    wrap.appendChild(btn); wrap.appendChild(del);
+    list.appendChild(wrap);
   });
   const canCreate = !isScannerMode();
   $('sessionNewBtn').disabled = !canCreate;
   $('sessionNewLocked').textContent = canCreate ? '' : '🔒 Scanner mode: only the secretary can start a new column.';
+  $('sessionUnlockBtn').classList.toggle('hidden', canCreate);
+  const curLabel = state.currentSession && state.currentSession.label;
+  $('sessionCleanBtn').classList.toggle('hidden', !order.some(l=>l !== curLabel && countLoggedTimes(l) === 0));
   $('sessionRefreshBtn').classList.toggle('hidden', !sheetsConfigured());
+}
+
+// How many Time In / Time Out entries are logged for a column across every group.
+function countLoggedTimes(label){
+  let n = 0;
+  state.groupOrder.forEach(gn=>{
+    const g = state.groups[gn]; if(!g) return;
+    (g.roster||[]).forEach(st=>{
+      const rec = st.attendance && st.attendance[label];
+      if(rec){ if(rec.in) n++; if(rec.out) n++; }
+    });
+  });
+  return n;
+}
+
+// 🗑 on a session: deletes the column in every group AND every tab of the Google Sheet.
+async function deleteSessionFromPicker(label){
+  const { names } = computeSessionUnion();
+  const eventName = names[label] || 'Attendance';
+  if(!(await requireAdmin('Enter the admin password to delete this column'))) return;
+  const n = countLoggedTimes(label);
+  const logged = n === 0 ? 'Nothing is logged in it yet.' : `${n} logged time${n === 1 ? '' : 's'} will be erased.`;
+  const where = sheetsConfigured() ? ' and from every tab of the Google Sheet' : '';
+  if(!confirm(`Delete "${eventName} · ${label}" from ALL groups${where}?\n\n${logged} This can't be undone.`)) return;
+  const done = await deleteColumnSynced(label);
+  if(done) showSessionList(); // refresh the list (and shows a notice if this was the one in use)
+}
+
+// Finds columns with nothing logged in any group and deletes them in one go.
+async function cleanUpEmptyColumns(){
+  if(!(await requireAdmin('Enter the admin password to clean up columns'))) return;
+  if(sheetsConfigured() && !(await refreshSheets())){
+    alert("Couldn't refresh from the Google Sheet, so I can't tell which columns are really empty. Check your connection and try again.");
+    return;
+  }
+  const { order, names } = computeSessionUnion();
+  const curLabel = state.currentSession && state.currentSession.label;
+  const empty = order.filter(l=>l !== curLabel && countLoggedTimes(l) === 0);
+  if(empty.length === 0){ showToast('No empty columns found'); renderSessionList(); return; }
+  const shown = empty.slice(0, 12).map(l=>`• ${names[l] || 'Attendance'} · ${l}`).join('\n');
+  const more = empty.length > 12 ? `\n…and ${empty.length - 12} more` : '';
+  if(!confirm(`These ${empty.length} column(s) have no times logged in any group:\n\n${shown}${more}\n\nDelete them from ALL groups${sheetsConfigured() ? ' and the Google Sheet' : ''}?`)) return;
+  let removed = 0;
+  for(const l of empty){
+    if(!(await deleteColumnSynced(l, undefined, true))) break;
+    removed++;
+  }
+  showToast(`Removed ${removed} empty column${removed === 1 ? '' : 's'}`);
+  showSessionList();
+}
+async function unlockFromPicker(){
+  if(!(await requireAdmin('Enter the admin password to switch to secretary mode'))) return;
+  applyScannerMode(false);
+  renderSessionList();
 }
 function chooseSession(label){
   const { names } = computeSessionUnion();
@@ -2396,6 +2711,8 @@ function createNewColumnFromForm(){
     showSessionList();
     return;
   }
+  const sameDay = existing.order.filter(l=>l.startsWith(dateLabel + ' (') && String(existing.names[l]||'').trim().toLowerCase() === eventName.toLowerCase());
+  if(sameDay.length && !confirm(`"${eventName}" already has a column on ${dateLabel} (${sameDay.join(', ')}).\n\nStart another one for ${newColPeriod} anyway?`)) return;
   const isNew = registerSession(label, scanMode, eventName); // creates it in EVERY group
   if(isNew) syncNewColumnToSheets(label, scanMode, eventName); // ...and every Sheet tab
   sessionPeriod = newColPeriod; state.sessionPeriod = newColPeriod;
@@ -2812,10 +3129,12 @@ function renameStudentSynced(group, student){
 // deleted here either (otherwise the next refresh would just bring them back).
 async function deleteStudentSynced(group, student){
   const groupName = state.activeGroupId;
+  if(!(await requireAdmin('Enter the admin password to delete a student'))) return;
   if(group && group.syncMode === 'sheets'){
     try{
-      await sheetsPost({ action:'deleteStudent', group: groupName, studentId: student.id });
+      await postAdmin({ action:'deleteStudent', group: groupName, studentId: student.id });
     }catch(err){
+      if(err.code === 'cancelled') return;
       alert('Could not remove them on the Google Sheet, so nothing was deleted: ' + err.message);
       return;
     }
@@ -2885,17 +3204,18 @@ function dropQueuedWritesFor(label, mode){
 
 // Deletes a date column, syncing the deletion to the Google Sheet first when
 // the active group is Sheets-synced (so other devices see it disappear too).
-async function deleteColumnSynced(label, mode){
+async function deleteColumnSynced(label, mode, quiet){
   if(sheetsConfigured()){
     try{
-      await sheetsPost({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label, mode: mode || undefined });
+      await postAdmin({ action:'deleteColumn', group: state.activeGroupId, sessionLabel: label, mode: mode || undefined });
     }catch(err){
-      alert('Could not delete on the Google Sheet: ' + err.message);
-      return;
+      if(err.code !== 'cancelled') alert('Could not delete on the Google Sheet: ' + err.message);
+      return false;
     }
   }
   if(mode) deleteColumnMode(label, mode); else deleteColumn(label);
-  showToast(mode ? `Removed the ${mode === 'out' ? 'Time Out' : 'Time In'} column from all groups` : 'Deleted from all groups');
+  if(!quiet) showToast(mode ? `Removed the ${mode === 'out' ? 'Time Out' : 'Time In'} column from all groups` : 'Deleted from all groups');
+  return true;
 }
 
 /* ============================== Import roster ============================== */
@@ -3158,7 +3478,12 @@ function logScanResult(group, groupName, student, sessionKey){
   resetResultBannerSoon();
 
   if(group.syncMode === 'sheets'){
-    syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, scanMode, time);
+    const modeNow = scanMode;
+    (async ()=>{
+      // A brand-new column is created first, by the secretary (admin password) — a scan alone can't create one.
+      const ready = isNewColumn ? await syncNewColumnToSheets(sessionKey, modeNow, eventName) : true;
+      await syncLogAttendanceInBackground(groupName, student, sessionKey, eventName, modeNow, time, ready);
+    })();
   } else if(isNewColumn){
     syncNewColumnToSheets(sessionKey, scanMode, eventName); // keep the Sheet's tabs in step
   }
@@ -3572,6 +3897,8 @@ async function confirmAddModal(){
     try{
       await sheetsPost({ action:'addStudent', group: targetGroup, studentId: id, studentName: name });
       if(sessionKey){
+        const knownModes = computeSessionUnion().modes[sessionKey];
+        if(!(knownModes && knownModes[mode])) await sheetsPost({ action:'ensureColumn', sessionLabel: sessionKey, mode, eventName });
         await sheetsPost({ action:'logAttendance', group: targetGroup, studentId: id, studentName: name, sessionLabel: sessionKey, eventName, mode, time });
       }
     }catch(err){
@@ -3983,7 +4310,8 @@ function init(){
     $('cameraHelpText').textContent = 'If the camera preview stays blank, check that camera permission is allowed for this app in your phone\'s Settings.';
   }
 
-  $('clearDataBtn').addEventListener('click', ()=>{
+  $('clearDataBtn').addEventListener('click', async ()=>{
+    if(!(await requireAdmin('Enter the admin password to clear all data'))) return;
     if(confirm('This permanently deletes ALL groups, rosters, and logged attendance on this device.\n\nTip: tap "Download backup" first if you might want any of it back. Continue?')){
       state = { fileName:'', scanMode: state.scanMode, sessionPeriod: state.sessionPeriod, groups:{}, groupOrder:[], activeGroupId:null };
       saveState();
@@ -4003,9 +4331,14 @@ function init(){
   $('newColCreateBtn').addEventListener('click', createNewColumnFromForm);
   $('sessionRefreshBtn').addEventListener('click', async ()=>{ await refreshSheets(); renderSessionList(); });
   $('scannerModeCheckbox').addEventListener('change', onScannerModeToggle);
-  $('pinSetBtn').addEventListener('click', setPinFromInput);
-  $('pinClearBtn').addEventListener('click', clearPin);
-  updatePinStatus();
+  $('sessionUnlockBtn').addEventListener('click', unlockFromPicker);
+  $('sessionCleanBtn').addEventListener('click', cleanUpEmptyColumns);
+  $('adminOkBtn').addEventListener('click', ()=> closeAdminAsk($('adminPwInput').value.trim() || null));
+  $('adminCancelBtn').addEventListener('click', ()=> closeAdminAsk(null));
+  $('adminPwInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter'){ e.preventDefault(); closeAdminAsk($('adminPwInput').value.trim() || null); } });
+  $('adminBackdrop').addEventListener('click', (e)=>{ if(e.target.id === 'adminBackdrop') closeAdminAsk(null); });
+  $('adminChangeBtn').addEventListener('click', changeAdminPassword);
+  updateAdminStatus();
   refreshSessionControl();
   updateBackupInfo();
   try{
